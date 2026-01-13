@@ -11,6 +11,8 @@ function Dashboard({ token, user, onLogout }) {
   const [workDoc, setWorkDoc] = useState('');
   const [modalDoc, setModalDoc] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [interns, setInterns] = useState([]);
+  const [selectedIntern, setSelectedIntern] = useState('all');
 
   const showAlert = (type, title, message) => {
     setAlert({ type, title, message });
@@ -24,6 +26,9 @@ function Dashboard({ token, user, onLogout }) {
   useEffect(() => {
     fetchAttendance();
     fetchUserProfile();
+    if (user.role === 'coordinator') {
+      fetchInterns();
+    }
     // eslint-disable-next-line
   }, []);
 
@@ -46,6 +51,18 @@ function Dashboard({ token, user, onLogout }) {
     setAttendance(data);
   };
 
+  const fetchInterns = async () => {
+    try {
+      const { data } = await axios.get(`${API}/interns`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      console.log('Fetched interns:', data);
+      setInterns(data);
+    } catch (err) {
+      console.error('Failed to fetch interns:', err);
+    }
+  };
+
   const checkIn = async () => {
     const today = new Date().toISOString().split('T')[0];
     const hasCheckedInToday = attendance.some(a => a.date === today && a.time_in);
@@ -66,10 +83,17 @@ function Dashboard({ token, user, onLogout }) {
     formData.append('time_in', timeIn);
     formData.append('photo', photo);
 
-    await axios.post(`${API}/attendance/checkin`, formData, {
+    const { data } = await axios.post(`${API}/attendance/checkin`, formData, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
     });
-    showAlert('success', 'Checked In!', 'Your attendance has been recorded successfully.');
+    
+    if (data.lateDeduction > 0) {
+      showAlert('warning', 'Late Check-In', 
+        `You are late by ${data.lateMinutes} minutes. You have been deducted ${data.lateDeduction} hour today.`);
+    } else {
+      showAlert('success', 'Checked In!', 'Your attendance has been recorded successfully.');
+    }
+    
     fetchAttendance();
     setPhoto(null);
   };
@@ -158,7 +182,7 @@ function Dashboard({ token, user, onLogout }) {
         </div>
 
         {user.role === 'intern' && (
-          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem'}}>
+          <div className="intern-grid">
             <div className="checkin-form">
               <h3>Check In / Out</h3>
               <div style={{marginBottom: '1rem'}}>
@@ -266,8 +290,33 @@ function Dashboard({ token, user, onLogout }) {
         )}
 
         <div className="attendance-table">
-          <h3>{user.role === 'coordinator' ? 'All Interns Attendance' : 'My Attendance History'}</h3>
-          <table>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.75rem 2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)'}}>
+            <h3 style={{margin: 0}}>{user.role === 'coordinator' ? 'All Interns Attendance' : 'My Attendance History'}</h3>
+            {user.role === 'coordinator' && (
+              <select
+                value={selectedIntern}
+                onChange={(e) => setSelectedIntern(e.target.value)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: '#00273C',
+                  color: '#e8eaed',
+                  border: '1px solid rgba(255, 113, 32, 0.3)',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="all">All Interns</option>
+                {interns.map(intern => (
+                  <option key={intern.id} value={intern.id}>
+                    {intern.full_name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="table-wrapper">
+            <table>
             <thead>
               <tr>
                 {user.role === 'coordinator' && <th>Intern Name</th>}
@@ -275,6 +324,7 @@ function Dashboard({ token, user, onLogout }) {
                 <th>Time In</th>
                 <th>Time Out</th>
                 <th>Status</th>
+                <th>Deduction</th>
                 <th>OT In</th>
                 <th>OT Out</th>
                 <th>Work Done</th>
@@ -282,7 +332,9 @@ function Dashboard({ token, user, onLogout }) {
               </tr>
             </thead>
             <tbody>
-              {attendance.map((a) => (
+              {attendance
+                .filter(a => selectedIntern === 'all' || a.user_id === selectedIntern)
+                .map((a) => (
                 <tr key={a.id}>
                   {user.role === 'coordinator' && <td>{a.full_name}</td>}
                   <td>{a.date}</td>
@@ -292,6 +344,11 @@ function Dashboard({ token, user, onLogout }) {
                     <span className={`status-badge ${a.status === 'On-Time' ? 'status-ontime' : 'status-late'}`}>
                       {a.status || '-'}
                     </span>
+                  </td>
+                  <td>
+                    {a.late_deduction_hours > 0 ? (
+                      <span style={{color: '#ff9d5c', fontWeight: '600'}}>-{a.late_deduction_hours}hr</span>
+                    ) : '-'}
                   </td>
                   <td>{a.ot_time_in || '-'}</td>
                   <td>{a.ot_time_out || '-'}</td>
@@ -328,6 +385,7 @@ function Dashboard({ token, user, onLogout }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
       

@@ -229,6 +229,12 @@ body {
   padding: 2.5rem;
 }
 
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 1rem;
+  }
+}
+
 .welcome {
   background: #001f35;
   padding: 1.75rem 2rem;
@@ -321,6 +327,18 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .table-wrapper {
+    margin: 0 -1rem;
+    padding: 0 1rem;
+  }
+}
+
 .attendance-table h3 {
   color: #ffffff;
   padding: 1.75rem 2rem;
@@ -333,6 +351,18 @@ body {
 table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 800px;
+}
+
+@media (max-width: 768px) {
+  table {
+    font-size: 0.85rem;
+  }
+  
+  th, td {
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+  }
 }
 
 th {
@@ -392,4 +422,74 @@ tr:hover {
 .photo-thumb:hover {
   border-color: #FF7120;
   transform: scale(1.05);
+}
+
+.intern-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 968px) {
+  .intern-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .header {
+    padding: 1rem 1.5rem;
+  }
+  
+  .header h1 {
+    font-size: 0.9rem;
+  }
+  
+  .welcome h2 {
+    font-size: 1.25rem;
+  }
+  
+  .attendance-table h3 {
+    font-size: 1rem;
+  }
+
+  /* Todo List Mobile Responsive */
+  .todo-layout {
+    flex-direction: column !important;
+  }
+
+  .todo-sidebar,
+  .todo-main,
+  .todo-calendar {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+  }
+
+  .todo-sidebar {
+    order: 1;
+  }
+
+  .todo-calendar {
+    order: 2;
+  }
+
+  .todo-main {
+    order: 3;
+  }
+
+  /* Todo Form Mobile */
+  .todo-form {
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+  }
+
+  .todo-form input {
+    width: 100% !important;
+  }
+
+  .todo-add-btn {
+    width: 100% !important;
+    padding: 0.65rem 1rem !important;
+    font-size: 0.85rem !important;
+  }
 }

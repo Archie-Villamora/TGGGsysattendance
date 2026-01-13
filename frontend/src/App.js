@@ -3,12 +3,13 @@ import axios from 'axios';
 import Login from './Login';
 import Dashboard from './Dashboard';
 import Profile from './Profile';
+import TodoList from './TodoList';
 import './App.css';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('user') || '{}'));
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [currentPage, setCurrentPage] = useState(localStorage.getItem('currentPage') || 'dashboard');
   const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
@@ -40,6 +41,11 @@ function App() {
     setCurrentPage('dashboard');
   };
 
+  const changePage = (page) => {
+    setCurrentPage(page);
+    localStorage.setItem('currentPage', page);
+  };
+
   if (!token) {
     return <Login onLogin={handleLogin} />;
   }
@@ -48,6 +54,8 @@ function App() {
     switch(currentPage) {
       case 'profile':
         return <Profile token={token} user={user} onLogout={handleLogout} />;
+      case 'todos':
+        return <TodoList token={token} />;
       default:
         return <Dashboard token={token} user={user} onLogout={handleLogout} />;
     }
@@ -66,7 +74,7 @@ function App() {
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <button 
-            onClick={() => setCurrentPage('dashboard')}
+            onClick={() => changePage('dashboard')}
             style={{
               background: currentPage === 'dashboard' ? '#FF7120' : 'transparent',
               color: currentPage === 'dashboard' ? 'white' : '#FF7120',
@@ -80,8 +88,25 @@ function App() {
           >
             Dashboard
           </button>
+          {user.role === 'intern' && (
+            <button 
+              onClick={() => changePage('todos')}
+              style={{
+                background: currentPage === 'todos' ? '#FF7120' : 'transparent',
+                color: currentPage === 'todos' ? 'white' : '#FF7120',
+                border: '1px solid rgba(255, 113, 32, 0.3)',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                transition: 'all 0.2s'
+              }}
+            >
+              Todo List
+            </button>
+          )}
           <button 
-            onClick={() => setCurrentPage('profile')}
+            onClick={() => changePage('profile')}
             style={{
               background: 'transparent',
               border: `2px solid ${currentPage === 'profile' ? '#FF7120' : 'rgba(255, 113, 32, 0.3)'}`,
