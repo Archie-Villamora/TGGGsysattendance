@@ -23,7 +23,7 @@ function Dashboard({ token, user, onLogout }) {
   })();
   const canCheckInNow = () => {
     const minutes = new Date().getHours() * 60 + new Date().getMinutes();
-    const inMorning = minutes >= 8 * 60 && minutes < 12 * 60;
+    const inMorning = minutes >= 5 * 60 && minutes < 12 * 60; // clickable early, counted window still 8-12
     const inAfternoon = minutes >= 13 * 60 && minutes < 17 * 60;
     const inOvertime = minutes >= 19 * 60 && minutes < 22 * 60;
     return inMorning || inAfternoon || inOvertime;
@@ -163,7 +163,7 @@ function Dashboard({ token, user, onLogout }) {
 
   const checkIn = async () => {
     if (!canCheckInNow()) {
-      showAlert('error', 'Not available', 'Time In is available 8AM-12PM, 1PM-5PM, and 7PM-10PM for overtime.');
+      showAlert('error', 'Not available', 'Time In is available 5AM-12PM (counted 8AM-12PM), 1PM-5PM, and 7PM-10PM for overtime.');
       return;
     }
 
@@ -409,7 +409,8 @@ function Dashboard({ token, user, onLogout }) {
                   </button>
                   {!canCheckInNow() && (
                     <div style={{ color: '#a0a4a8', fontSize: '0.9rem' }}>
-              </div>
+                      Time In available 5AM-12PM (counted 8AM-12PM), 1PM-5PM, and 7PM-10PM (overtime).
+                    </div>
                   )}
                 </div>
             </div>
