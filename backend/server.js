@@ -151,7 +151,7 @@ app.post('/api/attendance/checkin', auth, upload.single('photo'), async (req, re
     // Allow up to 2 check-ins per day (morning + afternoon)
     const { data: existingCheckins, error: existingError } = await supabaseAdmin
       .from('attendance')
-      .select('id')
+      .select('id, time_out')
       .eq('user_id', req.user.id)
       .eq('date', date);
 
