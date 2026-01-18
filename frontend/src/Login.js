@@ -59,6 +59,23 @@ function Login({ onLogin }) {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    setError(''); // Clear error on input change
+  };
+
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return 'Invalid email format';
+    if (!email.endsWith('@gmail.com')) return 'Only @gmail.com emails are allowed';
+    return null;
+  };
+
+  const validatePassword = (password) => {
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
+    if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
+    if (!/[0-9]/.test(password)) return 'Password must contain at least one number';
+    if (!/[!@#$%^&*]/.test(password)) return 'Password must contain at least one special character (!@#$%^&*)';
+    return null;
   };
 
   const handleLogin = async (e) => {
@@ -91,10 +108,26 @@ function Login({ onLogin }) {
 
   const handleSignup = async (e) => {
     e.preventDefault();
+    
+    // Validate email
+    const emailError = validateEmail(formData.email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+    
+    // Validate password
+    const passwordError = validatePassword(formData.password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+    
     if (!formData.acceptTerms) {
       setError('Please accept the terms and conditions');
       return;
     }
+    
     setIsLoading(true);
     setError('');
     try {
