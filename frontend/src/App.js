@@ -321,15 +321,15 @@ function App() {
                   <div className="header-dropdown-menu" style={{ 
                     position: window.innerWidth < 768 ? 'fixed' : 'absolute',
                     top: window.innerWidth < 768 ? '50%' : '110%',
-                    left: window.innerWidth < 768 ? '50%' : '50%',
-                    right: 'auto',
-                    transform: window.innerWidth < 768 ? 'translate(-50%, -50%)' : 'translateX(-50%)',
+                    right: window.innerWidth < 768 ? 'auto' : '0',
+                    left: window.innerWidth < 768 ? '50%' : 'auto',
+                    transform: window.innerWidth < 768 ? 'translate(-50%, -50%)' : 'none',
                     minWidth: '280px', 
-                    maxWidth: window.innerWidth < 768 ? 'calc(100vw - 3rem)' : 'calc(100vw - 2rem)', 
-                    width: '320px',
+                    maxWidth: window.innerWidth < 768 ? 'calc(100vw - 3rem)' : '320px', 
+                    width: window.innerWidth < 768 ? 'auto' : '320px',
                     zIndex: 1000,
-                    maxHeight: window.innerWidth < 768 ? '80vh' : 'none',
-                    overflowY: window.innerWidth < 768 ? 'auto' : 'visible'
+                    maxHeight: window.innerWidth < 768 ? '80vh' : '400px',
+                    overflowY: 'auto'
                   }}>
                     {notifications.length === 0 ? (
                       <div style={{ padding: '0.75rem 1rem', color: '#a0a4a8' }}>No notifications</div>
