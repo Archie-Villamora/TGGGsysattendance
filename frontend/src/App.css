@@ -422,6 +422,26 @@ th {
   letter-spacing: 0.05em;
 }
 
+th:nth-child(6) {
+  min-width: 120px;
+}
+
+th:nth-child(7) {
+  width: 60px;
+  min-width: 60px;
+  padding: 1rem 0.75rem;
+}
+
+td:nth-child(6) {
+  white-space: nowrap;
+}
+
+td:nth-child(7) {
+  width: 60px;
+  min-width: 60px;
+  padding: 1.25rem 0.75rem;
+}
+
 td {
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
