@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { LayoutDashboard, Clock, ListTodo, Bell } from 'lucide-react';
 import Login from './Login';
 import Dashboard from './Dashboard';
 import Profile from './Profile';
@@ -24,6 +25,7 @@ function App() {
   const [showOvertimeMenu, setShowOvertimeMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   useEffect(() => {
     if (token) {
@@ -39,38 +41,18 @@ function App() {
     if (!token) return;
     const loadNotifications = async () => {
       try {
-        const { data } = await axios.get(`${API}/attendance/my`, {
+        const { data } = await axios.get(`${API}/notifications`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const today = new Date().toISOString().split('T')[0];
-        const pendingCheckouts = data.filter(a => !a.time_out && a.date < today);
-        const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-        const otReminder = nowMinutes >= 14 * 60 + 30 && nowMinutes < 16 * 60;
-
-        const items = [];
-        if (pendingCheckouts.length > 0) {
-          items.push({
-            id: 'pending-checkout',
-            title: 'Pending checkouts',
-            detail: `${pendingCheckouts.length} older check-in(s) need checkout`
-          });
-        }
-        if (otReminder && user.role === 'intern') {
-          items.push({
-            id: 'ot-reminder',
-            title: 'OT reminder',
-            detail: 'Submit overtime between 3:00 PM and 4:00 PM.'
-          });
-        }
-        setNotifications(items);
+        setNotifications(data || []);
       } catch (err) {
         console.error('Notification load failed', err);
       }
     };
     loadNotifications();
-    const interval = setInterval(loadNotifications, 5 * 60 * 1000);
+    const interval = setInterval(loadNotifications, 30 * 1000); // Check every 30 seconds
     return () => clearInterval(interval);
-  }, [token, user.role]);
+  }, [token]);
 
   const checkTokenValidity = async () => {
     try {
@@ -113,6 +95,30 @@ function App() {
     setCurrentPage('dashboard');
   };
 
+  const handleNotificationClick = async (notification) => {
+    try {
+      // Mark as read
+      await axios.put(`${API}/notifications/${notification.id}/read`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Update local state
+      setNotifications(prev => 
+        prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n)
+      );
+      
+      // Navigate to page
+      if (notification.link) {
+        changePage(notification.link);
+      }
+      
+      // Close menu
+      setShowNotifMenu(false);
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
   const changePage = (page) => {
     setCurrentPage(page);
     localStorage.setItem('currentPage', page);
@@ -144,29 +150,34 @@ function App() {
 
   return (
     <div className="app">
-      <div className="header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      <div className="header" style={{ flexWrap: 'wrap', gap: '0.75rem', padding: '0.75rem 1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1 1 auto', minWidth: '200px' }}>
           <img 
             src="/imgs/logostick.png" 
             alt="Triple G BuildHub Logo" 
-            style={{ height: '40px', width: 'auto' }}
+            style={{ height: '32px', width: 'auto' }}
           />
-          <h1>Triple<span style={{ color: '#FF7120', fontSize: '1.5rem', fontWeight: '700' }}>G</span> BuildHub - OJT Attendance</h1>
+          <h1 style={{ fontSize: 'clamp(0.9rem, 2.5vw, 1.25rem)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Triple<span style={{ color: '#FF7120', fontSize: '1.2em', fontWeight: '700' }}>G</span> BuildHub</h1>
         </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <button 
             onClick={() => changePage('dashboard')}
             style={{
               background: currentPage === 'dashboard' ? '#FF7120' : 'transparent',
               color: currentPage === 'dashboard' ? 'white' : '#FF7120',
               border: '1px solid rgba(255, 113, 32, 0.3)',
-              padding: '0.5rem 1rem',
+              padding: '0.4rem 0.75rem',
               borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '0.9rem',
-              transition: 'all 0.2s'
+              fontSize: '0.85rem',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem'
             }}
           >
+            <LayoutDashboard size={16} />
             Dashboard
           </button>
           {user.role === 'intern' && (
@@ -177,14 +188,19 @@ function App() {
                   background: (currentPage === 'overtime' || currentPage === 'overtime-status') ? '#FF7120' : 'transparent',
                   color: (currentPage === 'overtime' || currentPage === 'overtime-status') ? 'white' : '#FF7120',
                   border: '1px solid rgba(255, 113, 32, 0.3)',
-                  padding: '0.5rem 1rem',
+                  padding: '0.4rem 0.75rem',
                   borderRadius: '6px',
                   cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  transition: 'all 0.2s'
+                  fontSize: '0.85rem',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
                 }}
               >
-                Overtime ▾
+                <Clock size={16} />
+                OT ▾
               </button>
               {showOvertimeMenu && (
                 <div className="header-dropdown-menu">
@@ -211,14 +227,19 @@ function App() {
                 background: currentPage === 'overtime-requests' ? '#FF7120' : 'transparent',
                 color: currentPage === 'overtime-requests' ? 'white' : '#FF7120',
                 border: '1px solid rgba(255, 113, 32, 0.3)',
-                padding: '0.5rem 1rem',
+                padding: '0.4rem 0.75rem',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: '0.9rem',
-                transition: 'all 0.2s'
+                fontSize: '0.85rem',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem'
               }}
             >
-              Overtime Requests
+              <Clock size={16} />
+              OT Requests
             </button>
           )}
           {user.role === 'intern' && (
@@ -228,14 +249,19 @@ function App() {
                 background: currentPage === 'todos' ? '#FF7120' : 'transparent',
                 color: currentPage === 'todos' ? 'white' : '#FF7120',
                 border: '1px solid rgba(255, 113, 32, 0.3)',
-                padding: '0.5rem 1rem',
+                padding: '0.4rem 0.75rem',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: '0.9rem',
-                transition: 'all 0.2s'
+                fontSize: '0.85rem',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem'
               }}
             >
-              Todo List
+              <ListTodo size={16} />
+              Todo
             </button>
           )}
           {user.role === 'intern' && (
@@ -244,8 +270,8 @@ function App() {
                 onClick={() => setShowNotifMenu(prev => !prev)}
                 title="Notifications"
                 style={{
-                  width: '44px',
-                  height: '44px',
+                  width: '38px',
+                  height: '38px',
                   borderRadius: '50%',
                   border: '1px solid rgba(255, 113, 32, 0.3)',
                   background: 'rgba(255, 113, 32, 0.1)',
@@ -253,13 +279,12 @@ function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#FF7120',
-                  fontSize: '18px',
                   cursor: 'pointer',
                   position: 'relative'
                 }}
               >
-                🔔
-                {notifications.length > 0 && (
+                <Bell size={18} />
+                {unreadCount > 0 && (
                   <span style={{
                     position: 'absolute',
                     top: '-4px',
@@ -267,27 +292,75 @@ function App() {
                     background: '#FF7120',
                     color: '#ffffff',
                     borderRadius: '999px',
-                    padding: '0 6px',
-                    fontSize: '11px',
+                    padding: '0 5px',
+                    fontSize: '10px',
                     fontWeight: '700',
-                    lineHeight: '18px',
-                    border: '1px solid rgba(0,0,0,0.15)'
-                  }}>{notifications.length}</span>
+                    lineHeight: '16px',
+                    border: '1px solid rgba(0,0,0,0.15)',
+                    minWidth: '16px',
+                    textAlign: 'center'
+                  }}>{unreadCount}</span>
                 )}
               </button>
               {showNotifMenu && (
-                <div className="header-dropdown-menu" style={{ right: '-60px', minWidth: '240px' }}>
-                  {notifications.length === 0 ? (
-                    <div style={{ padding: '0.75rem 1rem', color: '#a0a4a8' }}>No notifications</div>
-                  ) : (
-                    notifications.map(item => (
-                      <div key={item.id} style={{ padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#e8eaed' }}>
-                        <div style={{ fontWeight: '700', marginBottom: '4px' }}>{item.title}</div>
-                        <div style={{ fontSize: '0.9rem', color: '#a0a4a8' }}>{item.detail}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <>
+                  {/* Backdrop for mobile */}
+                  <div 
+                    onClick={() => setShowNotifMenu(false)}
+                    style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: 'rgba(0, 0, 0, 0.5)',
+                      zIndex: 999,
+                      display: window.innerWidth < 768 ? 'block' : 'none'
+                    }}
+                  />
+                  <div className="header-dropdown-menu" style={{ 
+                    position: window.innerWidth < 768 ? 'fixed' : 'absolute',
+                    top: window.innerWidth < 768 ? '50%' : '110%',
+                    left: window.innerWidth < 768 ? '50%' : '50%',
+                    right: 'auto',
+                    transform: window.innerWidth < 768 ? 'translate(-50%, -50%)' : 'translateX(-50%)',
+                    minWidth: '280px', 
+                    maxWidth: window.innerWidth < 768 ? 'calc(100vw - 3rem)' : 'calc(100vw - 2rem)', 
+                    width: '320px',
+                    zIndex: 1000,
+                    maxHeight: window.innerWidth < 768 ? '80vh' : 'none',
+                    overflowY: window.innerWidth < 768 ? 'auto' : 'visible'
+                  }}>
+                    {notifications.length === 0 ? (
+                      <div style={{ padding: '0.75rem 1rem', color: '#a0a4a8' }}>No notifications</div>
+                    ) : (
+                      notifications.map(item => (
+                        <div 
+                          key={item.id} 
+                          onClick={() => handleNotificationClick(item)}
+                          style={{ 
+                            padding: '0.75rem 1rem', 
+                            borderBottom: '1px solid rgba(255,255,255,0.06)', 
+                            color: '#e8eaed',
+                            cursor: 'pointer',
+                            background: item.is_read ? 'transparent' : 'rgba(255, 113, 32, 0.05)',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 113, 32, 0.1)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = item.is_read ? 'transparent' : 'rgba(255, 113, 32, 0.05)'}
+                        >
+                          <div style={{ fontWeight: '700', marginBottom: '4px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <span style={{ flex: '1 1 auto', minWidth: '0', wordBreak: 'break-word' }}>{item.title}</span>
+                            {!item.is_read && (
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF7120', flexShrink: 0 }}></span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#a0a4a8', lineHeight: '1.4', wordBreak: 'break-word' }}>{item.message}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -298,11 +371,12 @@ function App() {
                 background: currentPage === 'reports' ? '#FF7120' : 'transparent',
                 color: currentPage === 'reports' ? 'white' : '#FF7120',
                 border: '1px solid rgba(255, 113, 32, 0.3)',
-                padding: '0.5rem 1rem',
+                padding: '0.4rem 0.75rem',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                fontSize: '0.9rem',
-                transition: 'all 0.2s'
+                fontSize: '0.85rem',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap'
               }}
             >
               Reports
@@ -319,8 +393,8 @@ function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: '44px',
-              height: '44px',
+              width: '38px',
+              height: '38px',
               transition: 'all 0.2s',
               boxShadow: currentPage === 'profile' ? '0 0 0 2px rgba(255, 113, 32, 0.2)' : 'none'
             }}
@@ -330,16 +404,16 @@ function App() {
                 src={userProfile.profile_picture} 
                 alt="Profile" 
                 style={{
-                  width: '36px',
-                  height: '36px',
+                  width: '32px',
+                  height: '32px',
                   borderRadius: '50%',
                   objectFit: 'cover'
                 }}
               />
             ) : (
               <div style={{
-                width: '36px',
-                height: '36px',
+                width: '32px',
+                height: '32px',
                 borderRadius: '50%',
                 background: 'linear-gradient(135deg, #FF7120, #e66310)',
                 display: 'flex',
@@ -347,8 +421,8 @@ function App() {
                 justifyContent: 'center'
               }}>
                 <svg 
-                  width="20" 
-                  height="20" 
+                  width="18" 
+                  height="18" 
                   viewBox="0 0 24 24" 
                   fill="none" 
                   stroke="white" 

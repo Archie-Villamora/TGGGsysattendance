@@ -117,7 +117,7 @@ function OvertimeRequests({ token }) {
   };
 
   return (
-    <div className="dashboard">
+    <div className="dashboard" style={{overflowX: 'hidden'}}>
       {alert && (
         <Alert
           type={alert.type}
@@ -126,11 +126,11 @@ function OvertimeRequests({ token }) {
           onClose={() => setAlert(null)}
         />
       )}
-      <div className="welcome">
+      <div className="welcome" style={{boxSizing: 'border-box', maxWidth: '100%'}}>
         <h2>Overtime Requests</h2>
         <p>Coordinator view of all overtime submissions</p>
       </div>
-      <div className="attendance-table">
+      <div className="attendance-table" style={{boxSizing: 'border-box', maxWidth: '100%'}}>
         <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <h3 style={{ margin: 0 }}>All Requests</h3>
         </div>

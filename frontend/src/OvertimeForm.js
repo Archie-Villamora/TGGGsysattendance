@@ -156,7 +156,7 @@ function OvertimeForm({ token }) {
   };
 
   return (
-    <div className="dashboard">
+    <div className="dashboard" style={{overflowX: 'hidden'}}>
       {alert && (
         <Alert
           type={alert.type}
@@ -165,7 +165,7 @@ function OvertimeForm({ token }) {
           onClose={() => setAlert(null)}
         />
       )}
-      <div className="overtime-card">
+      <div className="overtime-card" style={{boxSizing: 'border-box', maxWidth: '100%'}}>
         <div className="overtime-heading">
           <h2>Overtime Request Form</h2>
           <p>Submit overtime details for approval.</p>
@@ -204,15 +204,6 @@ function OvertimeForm({ token }) {
               <select
                 value={form.department}
                 onChange={(e) => updateFormField('department', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  background: '#00273C',
-                  color: '#e8eaed',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  fontSize: '0.95rem'
-                }}
               >
                 <option value="">Select department</option>
                 <option value="IT Department">IT Department</option>
@@ -224,56 +215,118 @@ function OvertimeForm({ token }) {
           </div>
 
           <div className="overtime-section">
-            <div className="overtime-table">
-              <div className="overtime-table-top">
-                <div className="span-2">Date of Overtime Work</div>
-                <div className="span-2">Time of Overtime Work</div>
-                <div></div>
-              </div>
-              <div className="overtime-table-header">
-                <div>Start Date</div>
-                <div>End Date</div>
-                <div>Start Time</div>
-                <div>End Time</div>
-                <div></div>
-              </div>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
               {periods.map((p, idx) => (
-                <div className="overtime-table-row" key={`period-${idx}`}>
-                  <input
-                    type="date"
-                    value={p.start_date}
-                    onChange={(e) => updatePeriod(idx, 'start_date', e.target.value)}
-                  />
-                  <input
-                    type="date"
-                    value={p.end_date}
-                    onChange={(e) => updatePeriod(idx, 'end_date', e.target.value)}
-                  />
-                  <input
-                    type="time"
-                    value={p.start_time}
-                    onChange={(e) => updatePeriod(idx, 'start_time', e.target.value)}
-                  />
-                  <input
-                    type="time"
-                    value={p.end_time}
-                    onChange={(e) => updatePeriod(idx, 'end_time', e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="overtime-remove"
-                    onClick={() => removeRow(idx)}
-                    disabled={periods.length <= 1}
-                  >
-                    Remove
-                  </button>
+                <div key={`period-${idx}`} style={{
+                  background: '#00273C',
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem'}}>
+                    <h4 style={{color: '#e8eaed', margin: 0, fontSize: '0.9rem'}}>Period {idx + 1}</h4>
+                    <button
+                      type="button"
+                      onClick={() => removeRow(idx)}
+                      disabled={periods.length <= 1}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(255, 113, 32, 0.3)',
+                        color: periods.length <= 1 ? '#6b7280' : '#FF7120',
+                        padding: '0.4rem 0.75rem',
+                        borderRadius: '6px',
+                        cursor: periods.length <= 1 ? 'not-allowed' : 'pointer',
+                        fontSize: '0.8rem'
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div style={{display: 'grid', gridTemplateColumns: '1fr', gap: '0.75rem'}}>
+                    <div>
+                      <label style={{display: 'block', color: '#a0a4a8', marginBottom: '0.4rem', fontSize: '0.85rem'}}>Start Date</label>
+                      <input
+                        type="date"
+                        value={p.start_date}
+                        onChange={(e) => updatePeriod(idx, 'start_date', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          background: '#001a2b',
+                          color: '#e8eaed',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '8px',
+                          fontSize: '0.9rem'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{display: 'block', color: '#a0a4a8', marginBottom: '0.4rem', fontSize: '0.85rem'}}>End Date</label>
+                      <input
+                        type="date"
+                        value={p.end_date}
+                        onChange={(e) => updatePeriod(idx, 'end_date', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          background: '#001a2b',
+                          color: '#e8eaed',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '8px',
+                          fontSize: '0.9rem'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{display: 'block', color: '#a0a4a8', marginBottom: '0.4rem', fontSize: '0.85rem'}}>Start Time</label>
+                      <input
+                        type="time"
+                        value={p.start_time}
+                        onChange={(e) => updatePeriod(idx, 'start_time', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          background: '#001a2b',
+                          color: '#e8eaed',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '8px',
+                          fontSize: '0.9rem'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{display: 'block', color: '#a0a4a8', marginBottom: '0.4rem', fontSize: '0.85rem'}}>End Time</label>
+                      <input
+                        type="time"
+                        value={p.end_time}
+                        onChange={(e) => updatePeriod(idx, 'end_time', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          background: '#001a2b',
+                          color: '#e8eaed',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '8px',
+                          fontSize: '0.9rem'
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
-              <div className="overtime-actions">
-                <button type="button" onClick={addRow} className="overtime-add">
-                  Add Row
-                </button>
-              </div>
+              <button type="button" onClick={addRow} style={{
+                width: '100%',
+                background: '#FF7120',
+                color: 'white',
+                border: 'none',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: '600'
+              }}>
+                Add Period
+              </button>
             </div>
           </div>
 
@@ -309,6 +362,7 @@ function OvertimeForm({ token }) {
                     ref={sigCanvasRef}
                     width={400}
                     height={140}
+                    style={{maxWidth: '100%', height: 'auto'}}
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={endDrawing}

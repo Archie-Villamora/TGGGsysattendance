@@ -9,6 +9,7 @@ function Dashboard({ token, user, onLogout }) {
   const [photo, setPhoto] = useState(null);
   const [alert, setAlert] = useState(null);
   const [workDoc, setWorkDoc] = useState('');
+  const [attachments, setAttachments] = useState([]);
   const [modalDoc, setModalDoc] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [interns, setInterns] = useState([]);
@@ -16,11 +17,20 @@ function Dashboard({ token, user, onLogout }) {
   const [buttonLoading, setButtonLoading] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const todaysOpen = attendance.find(a => a.date === today && !a.time_out);
+  const todaysEntries = attendance.filter(a => a.date === today);
+  
   const canCheckInNow = () => {
     const minutes = new Date().getHours() * 60 + new Date().getMinutes();
-    const inMorning = minutes >= 5 * 60 && minutes < 12 * 60; // clickable early, counted window still 8-12
+    const inMorning = minutes >= 5 * 60 && minutes < 12 * 60;
     const inAfternoon = minutes >= 13 * 60 && minutes < 17 * 60;
     const inOvertime = minutes >= 19 * 60 && minutes < 22 * 60;
+    
+    // Check if already checked in for current session
+    if (todaysOpen) return false; // Has open session, can't check in again
+    
+    // Check if already completed both sessions
+    if (todaysEntries.length >= 2) return false;
+    
     return inMorning || inAfternoon || inOvertime;
   };
 
@@ -157,12 +167,16 @@ function Dashboard({ token, user, onLogout }) {
   };
 
   const checkIn = async () => {
+    if (todaysOpen) {
+      showAlert('error', 'Already Checked In', 'Please check out your current session before checking in again.');
+      return;
+    }
+
     if (!canCheckInNow()) {
       showAlert('error', 'Not available', 'Time In is available 5AM-12PM (counted 8AM-12PM), 1PM-5PM, and 7PM-10PM for overtime.');
       return;
     }
 
-    const todaysEntries = attendance.filter(a => a.date === today);
     if (todaysEntries.length >= 2) {
       showAlert('warning', 'Limit Reached', 'You have already completed both check-ins for today.');
       return;
@@ -215,15 +229,24 @@ function Dashboard({ token, user, onLogout }) {
     setButtonLoading(true);
     try {
       const timeOut = new Date().toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
-      await axios.put(`${API}/attendance/checkout/${id}`, { 
-        time_out: timeOut,
-        work_documentation: workDoc 
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
+      const formData = new FormData();
+      formData.append('time_out', timeOut);
+      formData.append('work_documentation', workDoc);
+      
+      attachments.forEach(file => {
+        formData.append('attachments', file);
+      });
+
+      await axios.put(`${API}/attendance/checkout/${id}`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
       });
       showAlert('success', 'Checked Out!', 'You have successfully checked out.');
       fetchAttendance();
       setWorkDoc('');
+      setAttachments([]);
     } finally {
       setButtonLoading(false);
     }
@@ -410,6 +433,64 @@ function Dashboard({ token, user, onLogout }) {
                   opacity: todaysOpen ? 1 : 0.5
                 }}
               />
+              
+              <div style={{marginTop: '1rem'}}>
+                <label style={{display: 'block', marginBottom: '0.5rem', color: '#a0a4a8', fontSize: '0.9rem'}}>
+                  Attachments (Optional)
+                </label>
+                <div style={{position: 'relative'}}>
+                  <input 
+                    type="file" 
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" 
+                    multiple
+                    onChange={(e) => setAttachments(Array.from(e.target.files))}
+                    disabled={!todaysOpen}
+                    style={{
+                      position: 'absolute',
+                      opacity: 0,
+                      width: '100%',
+                      height: '100%',
+                      cursor: todaysOpen ? 'pointer' : 'not-allowed'
+                    }}
+                    id="attachment-upload"
+                  />
+                  <label 
+                    htmlFor="attachment-upload"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '0.75rem 1rem',
+                      background: attachments.length > 0 ? 'rgba(255, 113, 32, 0.1)' : '#00273C',
+                      border: `2px dashed ${attachments.length > 0 ? '#FF7120' : 'rgba(255, 113, 32, 0.3)'}`,
+                      borderRadius: '8px',
+                      color: attachments.length > 0 ? '#FF7120' : '#a0a4a8',
+                      textAlign: 'center',
+                      cursor: todaysOpen ? 'pointer' : 'not-allowed',
+                      transition: 'all 0.2s',
+                      fontSize: '0.9rem',
+                      fontWeight: '500',
+                      opacity: todaysOpen ? 1 : 0.5
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                    {attachments.length > 0 ? `${attachments.length} file(s) selected` : 'Attach files (PDF, Word, Excel)'}
+                  </label>
+                </div>
+                {attachments.length > 0 && (
+                  <div style={{marginTop: '0.5rem', fontSize: '0.8rem', color: '#6b7280'}}>
+                    {attachments.map((file, idx) => (
+                      <div key={idx} style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+                        <span>📎 {file.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
               <p style={{color: '#6b7280', fontSize: '0.8rem', marginTop: '0.5rem'}}>
                     {todaysOpen
                       ? canCheckOutNow(todaysOpen)
@@ -491,6 +572,7 @@ function Dashboard({ token, user, onLogout }) {
                 <th>OT In</th>
                 <th>OT Out</th>
                 <th>Work Done</th>
+                <th>Attachments</th>
                 <th>Photo</th>
               </tr>
             </thead>
@@ -537,6 +619,34 @@ function Dashboard({ token, user, onLogout }) {
                             ...
                           </button>
                         )}
+                      </div>
+                    ) : '-'}
+                  </td>
+                  <td>
+                    {a.attachments && a.attachments.length > 0 ? (
+                      <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+                        {a.attachments.map((url, idx) => {
+                          const fileName = url.split('/').pop().split('?')[0];
+                          const ext = fileName.split('.').pop().toLowerCase();
+                          return (
+                            <a 
+                              key={idx}
+                              href={url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              style={{
+                                color: '#FF7120',
+                                textDecoration: 'none',
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              📎 {ext}
+                            </a>
+                          );
+                        })}
                       </div>
                     ) : '-'}
                   </td>

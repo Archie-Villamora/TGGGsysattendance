@@ -43,6 +43,11 @@ body {
   transition: all 0.2s;
 }
 
+.header button svg {
+  flex-shrink: 0;
+  stroke-width: 2;
+}
+
 .header button:hover {
   background: rgba(255, 113, 32, 0.1);
   border-color: #FF7120;
@@ -578,7 +583,8 @@ tr:hover {
 }
 
 .overtime-field input,
-.overtime-field textarea {
+.overtime-field textarea,
+.overtime-field select {
   width: 100%;
   padding: 0.75rem;
   background: #00273C;
@@ -586,6 +592,7 @@ tr:hover {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   font-size: 0.95rem;
+  box-sizing: border-box;
 }
 
 .overtime-field textarea {
@@ -787,11 +794,11 @@ tr:hover {
 
 @media (max-width: 768px) {
   .overtime-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .overtime-grid.hours-explanation {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .overtime-section-heading {
@@ -822,6 +829,16 @@ tr:hover {
 
   .dashboard {
     padding: 1rem;
+  }
+
+  .overtime-card {
+    padding: 1rem;
+  }
+
+  .overtime-field input,
+  .overtime-field textarea,
+  .overtime-field select {
+    max-width: 100%;
   }
 }
 
@@ -869,6 +886,7 @@ tr:hover {
   border-radius: 10px;
   padding: 1.5rem;
   margin-bottom: 1.25rem;
+  box-sizing: border-box;
 }
 
 .overtime-card h3 {
