@@ -785,13 +785,18 @@ app.put('/api/overtime/:id/approve', auth, async (req, res) => {
 // Notification endpoints
 app.get('/api/notifications', auth, async (req, res) => {
   try {
+    console.log('Fetching notifications for user:', req.user.id);
     const { data, error } = await supabaseAdmin
       .from('notifications')
       .select('*')
       .eq('user_id', req.user.id)
       .order('created_at', { ascending: false });
     
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error('Notifications fetch error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+    console.log('Notifications fetched:', data?.length || 0);
     res.json(data);
   } catch (err) {
     console.error('Notifications fetch exception:', err);
