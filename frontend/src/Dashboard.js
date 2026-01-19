@@ -27,7 +27,11 @@ function Dashboard({ token, user, onLogout }) {
   const getPhilippinesDate = () => {
     const now = new Date();
     const phTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
-    return phTime.toISOString().split('T')[0];
+    const isoDate = phTime.toISOString().split('T')[0];
+    console.log('DEBUG getPhilippinesDate - now:', now);
+    console.log('DEBUG getPhilippinesDate - phTime:', phTime);
+    console.log('DEBUG getPhilippinesDate - isoDate:', isoDate);
+    return isoDate;
   };
   
   const getPhilippinesTime = () => {
