@@ -437,7 +437,7 @@ function Dashboard({ token, user, onLogout }) {
                     disabled={
                       buttonLoading ||
                       !canCheckInNow() ||
-                      attendance.filter(a => a.date === new Date().toISOString().split('T')[0]).length >= 2
+                      todaysEntries.length >= 2
                     }
                     style={{
                       display: 'flex',
