@@ -5,6 +5,51 @@ import { CardSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+const getTodayDate = () => {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offsetMs).toISOString().split('T')[0];
+};
+
+const TIME_SLOTS = [
+  { value: '19:00', label: '7:00 PM' },
+  { value: '20:00', label: '8:00 PM' },
+  { value: '21:00', label: '9:00 PM' },
+  { value: '22:00', label: '10:00 PM' }
+];
+
+const calculateTotalHoursFromPeriods = (periods) => {
+  let totalMilliseconds = 0;
+  periods.forEach(({ start_date, start_time, end_date, end_time }) => {
+    if (!start_date || !start_time || !end_date || !end_time) {
+      return;
+    }
+    const start = new Date(`${start_date}T${start_time}`);
+    const end = new Date(`${end_date}T${end_time}`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return;
+    }
+    const diff = end - start;
+    if (diff > 0) {
+      totalMilliseconds += diff;
+    }
+  });
+  return totalMilliseconds / (1000 * 60 * 60);
+};
+
+const getInitialFormState = () => ({
+  employee_name: '',
+  job_position: '',
+  date_completed: getTodayDate(),
+  department: '',
+  anticipated_hours: '',
+  explanation: '',
+  employee_signature: '',
+  supervisor_signature: '',
+  management_signature: '',
+  approval_date: ''
+});
+
 function OvertimeForm({ token }) {
   const sigCanvasRef = useRef(null);
   const [saving, setSaving] = useState(false);
@@ -19,18 +64,18 @@ function OvertimeForm({ token }) {
       end_time: ''
     }
   ]);
-  const [form, setForm] = useState({
-    employee_name: '',
-    job_position: '',
-    date_completed: '',
-    department: '',
-    anticipated_hours: '',
-    explanation: '',
-    employee_signature: '',
-    supervisor_signature: '',
-    management_signature: '',
-    approval_date: ''
-  });
+  const [form, setForm] = useState(getInitialFormState);
+
+  useEffect(() => {
+    const totalHours = calculateTotalHoursFromPeriods(periods);
+    const hoursText = totalHours > 0 ? totalHours.toFixed(2) : '';
+    setForm(prev => {
+      if (prev.anticipated_hours === hoursText) {
+        return prev;
+      }
+      return { ...prev, anticipated_hours: hoursText };
+    });
+  }, [periods]);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -66,6 +111,64 @@ function OvertimeForm({ token }) {
     });
   };
 
+  const validateForm = () => {
+    if (!form.employee_name.trim()) {
+      return 'Employee name is required.';
+    }
+    if (!form.job_position.trim()) {
+      return 'Job position is required.';
+    }
+    if (!form.date_completed) {
+      return 'Date of completion is required.';
+    }
+    if (!form.department) {
+      return 'Please select a department.';
+    }
+    const todayIso = getTodayDate();
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const cutoffMinutes = 15 * 60;
+    const hasSameDayPeriod = periods.some(period =>
+      period.start_date === todayIso && period.end_date === todayIso
+    );
+    if (hasSameDayPeriod && nowMinutes >= cutoffMinutes) {
+      return 'Same-day overtime requests must be submitted before 3:00 PM.';
+    }
+    const hasAnyPeriod = periods.some(period => period.start_date || period.end_date || period.start_time || period.end_time);
+    if (!hasAnyPeriod) {
+      return 'Add at least one overtime period.';
+    }
+    for (let index = 0; index < periods.length; index += 1) {
+      const period = periods[index];
+      const hasEntry = period.start_date || period.end_date || period.start_time || period.end_time;
+      if (!hasEntry) {
+        continue;
+      }
+      if (!period.start_date || !period.end_date || !period.start_time || !period.end_time) {
+        return `Period ${index + 1} is incomplete. Please fill all date and time fields.`;
+      }
+      const start = new Date(`${period.start_date}T${period.start_time}`);
+      const end = new Date(`${period.end_date}T${period.end_time}`);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return `Period ${index + 1} has an invalid date or time.`;
+      }
+      if (end <= start) {
+        return `Period ${index + 1} must end after it starts.`;
+      }
+    }
+    const totalHours = calculateTotalHoursFromPeriods(periods);
+    if (totalHours <= 0) {
+      return 'Anticipated overtime hours could not be calculated. Please review your periods.';
+    }
+    if (!form.explanation.trim()) {
+      return 'Please provide an explanation for the overtime.';
+    }
+    if (!form.employee_signature) {
+      return 'Please sign the form before submitting.';
+    }
+    return '';
+  };
+
   const addRow = () => {
     setPeriods(prev => [...prev, { start_date: '', end_date: '', start_time: '', end_time: '' }]);
   };
@@ -76,8 +179,13 @@ function OvertimeForm({ token }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
     setAlert(null);
+    const validationError = validateForm();
+    if (validationError) {
+      setAlert({ type: 'error', title: 'Validation error', message: validationError });
+      return;
+    }
+    setSaving(true);
     try {
       const payload = {
         ...form,
@@ -87,25 +195,16 @@ function OvertimeForm({ token }) {
         headers: { Authorization: `Bearer ${token}` }
       });
       setAlert({ type: 'success', title: 'Submitted', message: 'Overtime request submitted successfully.' });
-      // fully reset form and periods
       setPeriods([{
         start_date: '',
         end_date: '',
         start_time: '',
         end_time: ''
       }]);
-      setForm({
-        employee_name: '',
-        job_position: '',
-        date_completed: '',
-        department: '',
-        anticipated_hours: '',
-        explanation: '',
-        employee_signature: '',
-        supervisor_signature: '',
-        management_signature: '',
-        approval_date: ''
-      });
+      if (sigCanvasRef.current) {
+        clearSignature();
+      }
+      setForm(getInitialFormState());
     } catch (err) {
       const msg = err.response?.data?.error || 'Failed to submit overtime request.';
       setAlert({ type: 'error', title: 'Error', message: msg });
@@ -206,6 +305,7 @@ function OvertimeForm({ token }) {
                 type="date"
                 value={form.date_completed}
                 onChange={(e) => updateFormField('date_completed', e.target.value)}
+                required
               />
             </div>
             <div className="overtime-field span-3">
@@ -213,6 +313,7 @@ function OvertimeForm({ token }) {
               <select
                 value={form.department}
                 onChange={(e) => updateFormField('department', e.target.value)}
+                required
               >
                 <option value="">Select department</option>
                 <option value="IT Department">IT Department</option>
@@ -288,8 +389,7 @@ function OvertimeForm({ token }) {
                     </div>
                     <div>
                       <label style={{display: 'block', color: '#a0a4a8', marginBottom: '0.4rem', fontSize: '0.85rem'}}>Start Time</label>
-                      <input
-                        type="time"
+                      <select
                         value={p.start_time}
                         onChange={(e) => updatePeriod(idx, 'start_time', e.target.value)}
                         style={{
@@ -301,12 +401,18 @@ function OvertimeForm({ token }) {
                           borderRadius: '8px',
                           fontSize: '0.9rem'
                         }}
-                      />
+                      >
+                        <option value="">Select time</option>
+                        {TIME_SLOTS.map(slot => (
+                          <option key={`start-${slot.value}`} value={slot.value}>
+                            {slot.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label style={{display: 'block', color: '#a0a4a8', marginBottom: '0.4rem', fontSize: '0.85rem'}}>End Time</label>
-                      <input
-                        type="time"
+                      <select
                         value={p.end_time}
                         onChange={(e) => updatePeriod(idx, 'end_time', e.target.value)}
                         style={{
@@ -318,7 +424,14 @@ function OvertimeForm({ token }) {
                           borderRadius: '8px',
                           fontSize: '0.9rem'
                         }}
-                      />
+                      >
+                        <option value="">Select time</option>
+                        {TIME_SLOTS.map(slot => (
+                          <option key={`end-${slot.value}`} value={slot.value}>
+                            {slot.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -344,10 +457,10 @@ function OvertimeForm({ token }) {
               <label>Anticipated Number of Overtime Hours</label>
               <input
                 type="number"
-                min="1"
-                step="1"
+                min="0"
+                step="0.01"
                 value={form.anticipated_hours}
-                onChange={(e) => updateFormField('anticipated_hours', e.target.value)}
+                readOnly
               />
             </div>
             <div className="overtime-field stretch">
