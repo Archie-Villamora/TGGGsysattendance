@@ -1,18 +1,27 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Alert from './components/Alert';
 import { TableSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+const escapeHtml = (value) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
 function OvertimeRequests({ token }) {
   const [requests, setRequests] = useState([]);
   const [selected, setSelected] = useState(null);
   const [alert, setAlert] = useState(null);
   const [loading, setLoading] = useState(true);
-  const supervisorPadRef = useRef(null);
-  const managementPadRef = useRef(null);
-  const [isDrawing, setIsDrawing] = useState({ supervisor: false, management: false });
   const [approvalDate, setApprovalDate] = useState('');
 
   useEffect(() => {
@@ -41,55 +50,6 @@ function OvertimeRequests({ token }) {
   const openDetail = (req) => {
     setSelected(req);
     setApprovalDate(req.approval_date || new Date().toISOString().split('T')[0]);
-    clearPad('supervisor');
-    clearPad('management');
-  };
-
-  const getPos = (event, pad) => {
-    const canvas = pad.current;
-    const rect = canvas.getBoundingClientRect();
-    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
-    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
-    };
-  };
-
-  const startDraw = (event, who) => {
-    event.preventDefault();
-    const pad = who === 'supervisor' ? supervisorPadRef : managementPadRef;
-    setIsDrawing(prev => ({ ...prev, [who]: true }));
-    const ctx = pad.current.getContext('2d');
-    const { x, y } = getPos(event, pad);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  };
-
-  const draw = (event, who) => {
-    if (!isDrawing[who]) return;
-    event.preventDefault();
-    const pad = who === 'supervisor' ? supervisorPadRef : managementPadRef;
-    const ctx = pad.current.getContext('2d');
-    const { x, y } = getPos(event, pad);
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-  };
-
-  const endDraw = (who) => {
-    if (!isDrawing[who]) return;
-    setIsDrawing(prev => ({ ...prev, [who]: false }));
-  };
-
-  const clearPad = (who) => {
-    const pad = who === 'supervisor' ? supervisorPadRef : managementPadRef;
-    if (pad.current) {
-      const ctx = pad.current.getContext('2d');
-      ctx.clearRect(0, 0, pad.current.width, pad.current.height);
-    }
   };
 
   const statusLabel = (req) => {
@@ -104,11 +64,9 @@ function OvertimeRequests({ token }) {
   const submitApproval = async () => {
     if (!selected) return;
     try {
-      const supervisorSig = supervisorPadRef.current.toDataURL('image/png');
-      const managementSig = managementPadRef.current.toDataURL('image/png');
       await axios.put(`${API}/overtime/${selected.id}/approve`, {
-        supervisor_signature: supervisorSig,
-        management_signature: managementSig,
+        supervisor_signature: 'approved',
+        management_signature: 'approved',
         approval_date: approvalDate
       }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -119,6 +77,66 @@ function OvertimeRequests({ token }) {
     } catch (err) {
       setAlert({ type: 'error', title: 'Save failed', message: err.response?.data?.error || 'Could not save approval.' });
     }
+  };
+
+  const printReport = (req) => {
+    if (!req) return;
+    const doc = window.open('', '_blank');
+    if (!doc) return;
+    const periods = Array.isArray(req.periods) ? req.periods : [];
+    const periodRows = periods.map((period, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td>${escapeHtml(period.start_date || '-')}</td>
+        <td>${escapeHtml(period.start_time || '-')}</td>
+        <td>${escapeHtml(period.end_date || '-')}</td>
+        <td>${escapeHtml(period.end_time || '-')}</td>
+      </tr>
+    `).join('');
+    const html = `
+      <html>
+        <head>
+          <title>Overtime Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; background: #fff; color: #000; padding: 2rem; }
+            h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+            table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+            th, td { border: 1px solid #222; padding: 0.5rem; text-align: left; font-size: 0.9rem; }
+            .field { margin-bottom: 0.5rem; }
+            .field-label { font-weight: 600; }
+          </style>
+        </head>
+        <body>
+          <h1>Overtime Request</h1>
+          <div class="field"><span class="field-label">Employee Name:</span> ${escapeHtml(req.employee_name || req.full_name || '-')}</div>
+          <div class="field"><span class="field-label">Job Position:</span> ${escapeHtml(req.job_position || '-')}</div>
+          <div class="field"><span class="field-label">Department:</span> ${escapeHtml(req.department || '-')}</div>
+          <div class="field"><span class="field-label">Date Completed:</span> ${escapeHtml(req.date_completed || '-')}</div>
+          <div class="field"><span class="field-label">Anticipated Hours:</span> ${escapeHtml(req.anticipated_hours || '-')}</div>
+          <div class="field"><span class="field-label">Explanation:</span> ${escapeHtml(req.explanation || '-')}</div>
+          <div class="field"><span class="field-label">Approval Date:</span> ${escapeHtml(req.approval_date || '-')}</div>
+          <h2>Periods</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Start Date</th>
+                <th>Start Time</th>
+                <th>End Date</th>
+                <th>End Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${periods.length ? periodRows : '<tr><td colspan="5" style="text-align:center;">No periods provided.</td></tr>'}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+    doc.document.write(html);
+    doc.document.close();
+    doc.focus();
+    doc.print();
   };
 
   return (
@@ -151,6 +169,7 @@ function OvertimeRequests({ token }) {
                 <th>Date Completed</th>
                 <th>Hours</th>
                 <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -168,6 +187,25 @@ function OvertimeRequests({ token }) {
                     <td>{req.date_completed || '-'}</td>
                     <td>{req.anticipated_hours || '-'}</td>
                     <td>{statusLabel(req)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); printReport(req); }}
+                        disabled={statusLabel(req) !== 'Approved'}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: '#FF7120',
+                          color: '#fff',
+                          cursor: statusLabel(req) === 'Approved' ? 'pointer' : 'not-allowed',
+                          fontSize: '0.8rem',
+                          fontWeight: '600'
+                        }}
+                      >
+                        Print Report
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -205,11 +243,31 @@ function OvertimeRequests({ token }) {
                 style={{ background: 'transparent', border: 'none', color: '#FF7120', fontSize: '1.5rem', cursor: 'pointer' }}
               >×</button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
-              <div><label style={{ color: '#a0a4a8' }}>Job Position</label><div style={{ color: '#fff' }}>{selected.job_position}</div></div>
-              <div><label style={{ color: '#a0a4a8' }}>Department</label><div style={{ color: '#fff' }}>{selected.department || '-'}</div></div>
-              <div><label style={{ color: '#a0a4a8' }}>Date Completed</label><div style={{ color: '#fff' }}>{selected.date_completed || '-'}</div></div>
-              <div><label style={{ color: '#a0a4a8' }}>Anticipated Hours</label><div style={{ color: '#fff' }}>{selected.anticipated_hours || '-'}</div></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ color: '#a0a4a8' }}>Employee Name</label>
+                <div style={{ color: '#fff' }}>{selected.full_name || selected.employee_name || '-'}</div>
+              </div>
+              <div>
+                <label style={{ color: '#a0a4a8' }}>Job Position</label>
+                <div style={{ color: '#fff' }}>{selected.job_position || '-'}</div>
+              </div>
+              <div>
+                <label style={{ color: '#a0a4a8' }}>Department</label>
+                <div style={{ color: '#fff' }}>{selected.department || '-'}</div>
+              </div>
+              <div>
+                <label style={{ color: '#a0a4a8' }}>Date Completed</label>
+                <div style={{ color: '#fff' }}>{selected.date_completed || '-'}</div>
+              </div>
+              <div>
+                <label style={{ color: '#a0a4a8' }}>Anticipated Hours</label>
+                <div style={{ color: '#fff' }}>{selected.anticipated_hours || '-'}</div>
+              </div>
+              <div>
+                <label style={{ color: '#a0a4a8' }}>Approval Date</label>
+                <div style={{ color: '#fff' }}>{selected.approval_date || '-'}</div>
+              </div>
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ color: '#a0a4a8' }}>Explanation</label>
@@ -217,66 +275,53 @@ function OvertimeRequests({ token }) {
                 {selected.explanation || '-'}
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '1rem', marginTop: '1rem' }}>
-              <div>
-                <label style={{ color: '#a0a4a8' }}>Supervisor Signature</label>
-                <div className="signature-pad">
-                  <canvas
-                    ref={supervisorPadRef}
-                    width={360}
-                    height={120}
-                    onMouseDown={(e) => startDraw(e, 'supervisor')}
-                    onMouseMove={(e) => draw(e, 'supervisor')}
-                    onMouseUp={() => endDraw('supervisor')}
-                    onMouseLeave={() => endDraw('supervisor')}
-                    onTouchStart={(e) => startDraw(e, 'supervisor')}
-                    onTouchMove={(e) => draw(e, 'supervisor')}
-                    onTouchEnd={() => endDraw('supervisor')}
-                  />
-                  <div className="signature-actions">
-                    <button type="button" className="ghost" onClick={() => clearPad('supervisor')}>Clear</button>
-                    <span className="signature-hint">Sign with mouse or finger</span>
-                  </div>
-                </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ color: '#a0a4a8' }}>Overtime Periods</label>
+              <div style={{ background: '#001b30', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.75rem' }}>
+                {Array.isArray(selected.periods) && selected.periods.length > 0 ? (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>#</th>
+                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>Start Date</th>
+                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>Start Time</th>
+                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>End Date</th>
+                        <th style={{ textAlign: 'left', padding: '0.35rem 0.25rem', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>End Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selected.periods.map((period, idx) => (
+                        <tr key={`pv-${idx}`}>
+                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{idx + 1}</td>
+                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{period.start_date || '-'}</td>
+                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{period.start_time || '-'}</td>
+                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{period.end_date || '-'}</td>
+                          <td style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '0.35rem 0.25rem' }}>{period.end_time || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div style={{ color: '#fff' }}>No periods recorded.</div>
+                )}
               </div>
-              <div>
-                <label style={{ color: '#a0a4a8' }}>Top Management Signature</label>
-                <div className="signature-pad">
-                  <canvas
-                    ref={managementPadRef}
-                    width={360}
-                    height={120}
-                    onMouseDown={(e) => startDraw(e, 'management')}
-                    onMouseMove={(e) => draw(e, 'management')}
-                    onMouseUp={() => endDraw('management')}
-                    onMouseLeave={() => endDraw('management')}
-                    onTouchStart={(e) => startDraw(e, 'management')}
-                    onTouchMove={(e) => draw(e, 'management')}
-                    onTouchEnd={() => endDraw('management')}
-                  />
-                  <div className="signature-actions">
-                    <button type="button" className="ghost" onClick={() => clearPad('management')}>Clear</button>
-                    <span className="signature-hint">Sign with mouse or finger</span>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label style={{ color: '#a0a4a8' }}>Date of Approval</label>
-                <input
-                  type="date"
-                  value={approvalDate}
-                  onChange={(e) => setApprovalDate(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    background: '#00273C',
-                    color: '#e8eaed',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '8px',
-                    fontSize: '0.95rem'
-                  }}
-                />
-              </div>
+            </div>
+            <div style={{ marginBottom: '1rem', maxWidth: '360px' }}>
+              <label style={{ color: '#a0a4a8' }}>Date of Approval</label>
+              <input
+                type="date"
+                value={approvalDate}
+                onChange={(e) => setApprovalDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  background: '#00273C',
+                  color: '#e8eaed',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  fontSize: '0.95rem'
+                }}
+              />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
               <button
