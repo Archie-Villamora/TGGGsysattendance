@@ -4,6 +4,8 @@ const { createClient } = require('@supabase/supabase-js');
 const cors = require('cors');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
+const { format } = require('date-fns');
+const { toZonedTime } = require('date-fns-tz');
 
 const app = express();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
@@ -14,7 +16,7 @@ app.use(express.json());
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
     allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Invalid file type'));
@@ -23,7 +25,7 @@ const upload = multer({
 
 const uploadDocs = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = [
       'application/pdf',
@@ -156,8 +158,8 @@ app.post('/api/attendance/checkin', auth, upload.single('photo'), async (req, re
   try {
     const { time_in } = req.body;
     // Use Philippines timezone for date
-    const phDate = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
-    const date = new Date(phDate).toISOString().split('T')[0];
+    const phTime = toZonedTime(new Date(), 'Asia/Manila');
+    const date = format(phTime, 'yyyy-MM-dd');
 
     // Allow up to 2 check-ins per day (morning + afternoon)
     const { data: existingCheckins, error: existingError } = await supabaseAdmin
@@ -338,8 +340,8 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
 
 app.put('/api/attendance/overtime-in/:id', auth, async (req, res) => {
   // Use Philippines timezone for date
-  const phDate = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
-  const today = new Date(phDate).toISOString().split('T')[0];
+  const phTime = toZonedTime(new Date(), 'Asia/Manila');
+  const today = format(phTime, 'yyyy-MM-dd');
   // Require afternoon checkout to be completed
   const { data: afternoon, error: afternoonError } = await supabaseAdmin
     .from('attendance')
@@ -354,8 +356,8 @@ app.put('/api/attendance/overtime-in/:id', auth, async (req, res) => {
     return res.status(400).json({ error: 'Complete afternoon checkout before starting overtime.' });
   }
 
-  const now = new Date();
-  const otTimeIn = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+  const phTime2 = toZonedTime(new Date(), 'Asia/Manila');
+  const otTimeIn = format(phTime2, 'hh:mm a');
   const { error } = await supabaseAdmin
     .from('attendance')
     .update({ ot_time_in: otTimeIn })
@@ -367,8 +369,8 @@ app.put('/api/attendance/overtime-in/:id', auth, async (req, res) => {
 });
 
 app.put('/api/attendance/overtime-out/:id', auth, async (req, res) => {
-  const now = new Date();
-  const otTimeOut = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+  const phTime = toZonedTime(new Date(), 'Asia/Manila');
+  const otTimeOut = format(phTime, 'hh:mm a');
   const { error } = await supabaseAdmin
     .from('attendance')
     .update({ ot_time_out: otTimeOut })
@@ -535,6 +537,9 @@ app.post('/api/profile/picture', auth, upload.single('profile_pic'), async (req,
     res.json({ success: true, url: publicUrl });
   } catch (err) {
     console.error('Profile picture upload exception:', err);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File size exceeds 5MB limit' });
+    }
     res.status(500).json({ error: err.message });
   }
 });

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import Alert from './components/Alert';
 import { TableSkeleton, CardSkeleton } from './components/SkeletonLoader';
 
@@ -25,22 +27,13 @@ function Dashboard({ token, user, onLogout }) {
   
   // Get current date/time in Philippines timezone (UTC+8)
   const getPhilippinesDate = () => {
-    const now = new Date();
-    const phTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
-    const year = phTime.getFullYear();
-    const month = String(phTime.getMonth() + 1).padStart(2, '0');
-    const day = String(phTime.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const phTime = toZonedTime(new Date(), 'Asia/Manila');
+    return format(phTime, 'yyyy-MM-dd');
   };
   
   const getPhilippinesTime = () => {
-    const now = new Date();
-    return now.toLocaleTimeString('en-US', { 
-      timeZone: 'Asia/Manila',
-      hour12: true, 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+    const phTime = toZonedTime(new Date(), 'Asia/Manila');
+    return format(phTime, 'hh:mm a');
   };
   
   const today = getPhilippinesDate();
@@ -60,17 +53,13 @@ function Dashboard({ token, user, onLogout }) {
   }, [attendance, today, todaysEntries, todaysOpen]);
   
   const canCheckInNow = () => {
-    const now = new Date();
-    const phTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    const phTime = toZonedTime(new Date(), 'Asia/Manila');
     const minutes = phTime.getHours() * 60 + phTime.getMinutes();
     const inMorning = minutes >= 5 * 60 && minutes < 12 * 60;
-    const inAfternoon = minutes >= (12 * 60 + 40) && minutes < 17 * 60; // 12:40 PM to 5 PM
+    const inAfternoon = minutes >= (12 * 60 + 40) && minutes < 17 * 60;
     const inOvertime = minutes >= 19 * 60 && minutes < 22 * 60;
     
-    // Check if already checked in for current session
-    if (todaysOpen) return false; // Has open session, can't check in again
-    
-    // Check if already completed both sessions
+    if (todaysOpen) return false;
     if (todaysEntries.length >= 2) return false;
     
     return inMorning || inAfternoon || inOvertime;
@@ -98,16 +87,15 @@ function Dashboard({ token, user, onLogout }) {
 
   const canCheckOutNow = (entry) => {
     if (!entry || !entry.time_in) return false;
-    const now = new Date();
-    const phTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    const phTime = toZonedTime(new Date(), 'Asia/Manila');
     const nowMinutes = phTime.getHours() * 60 + phTime.getMinutes();
     const startMinutes = parseMinutes(entry.time_in);
     if (startMinutes === null) return false;
     const isMorning = startMinutes < 12 * 60;
     if (isMorning) {
-      return nowMinutes >= 12 * 60; // Can checkout from 12PM onwards for morning
+      return nowMinutes >= 12 * 60;
     }
-    return nowMinutes >= 17 * 60; // afternoon checkout from 5PM onwards
+    return nowMinutes >= 17 * 60;
   };
 
   const showAlert = (type, title, message) => {
@@ -382,7 +370,15 @@ function Dashboard({ token, user, onLogout }) {
                   <input 
                     type="file" 
                     accept="image/*" 
-                    onChange={(e) => setPhoto(e.target.files[0])}
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file && file.size > 5 * 1024 * 1024) {
+                        showAlert('error', 'File Too Large', 'Image must be less than 5MB.');
+                        e.target.value = '';
+                        return;
+                      }
+                      setPhoto(file);
+                    }}
                     style={{
                       position: 'absolute',
                       opacity: 0,

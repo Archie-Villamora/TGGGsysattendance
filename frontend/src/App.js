@@ -14,6 +14,12 @@ import './App.css';
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 function App() {
+  // Clear sessionStorage if rememberMe is OFF (browser was closed and reopened)
+  const rememberMe = localStorage.getItem('rememberMe');
+  if (!rememberMe) {
+    sessionStorage.clear();
+  }
+
   const [token, setToken] = useState(
     localStorage.getItem('token') || sessionStorage.getItem('token')
   );
@@ -29,13 +35,23 @@ function App() {
 
   useEffect(() => {
     if (token) {
-      fetchUserProfile();
+      // Validate token immediately on mount
+      validateAndFetchProfile();
       // Check token validity periodically
       const interval = setInterval(checkTokenValidity, 60000); // Check every minute
       return () => clearInterval(interval);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  const validateAndFetchProfile = async () => {
+    try {
+      await fetchUserProfile();
+    } catch (err) {
+      console.error('Token validation failed:', err);
+      handleLogout();
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -72,14 +88,10 @@ function App() {
   };
 
   const fetchUserProfile = async () => {
-    try {
-      const { data } = await axios.get(`${API}/profile`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUserProfile(data);
-    } catch (err) {
-      console.error('Failed to fetch user profile:', err);
-    }
+    const { data } = await axios.get(`${API}/profile`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setUserProfile(data);
   };
 
   const handleLogin = (newToken, newUser) => {

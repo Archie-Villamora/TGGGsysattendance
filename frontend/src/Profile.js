@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import Alert from './components/Alert';
 import { CardSkeleton } from './components/SkeletonLoader';
 
@@ -128,6 +130,12 @@ function Profile({ token, user, onLogout }) {
   const uploadProfilePic = async () => {
     if (!profilePic) return;
 
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (profilePic.size > maxSize) {
+      showAlert('error', 'File Too Large', 'Image must be less than 5MB.');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('profile_pic', profilePic);
 
@@ -142,7 +150,8 @@ function Profile({ token, user, onLogout }) {
       setProfilePic(null);
       fetchProfile();
     } catch (err) {
-      showAlert('error', 'Upload Failed', 'Failed to upload profile picture.');
+      const errorMsg = err.response?.data?.error || 'Failed to upload profile picture.';
+      showAlert('error', 'Upload Failed', errorMsg);
     }
   };
 
@@ -218,7 +227,15 @@ function Profile({ token, user, onLogout }) {
                 <input 
                   type="file" 
                   accept="image/*" 
-                  onChange={(e) => setProfilePic(e.target.files[0])}
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file && file.size > 5 * 1024 * 1024) {
+                      showAlert('error', 'File Too Large', 'Image must be less than 5MB.');
+                      e.target.value = '';
+                      return;
+                    }
+                    setProfilePic(file);
+                  }}
                   style={{
                     position: 'absolute',
                     opacity: 0,

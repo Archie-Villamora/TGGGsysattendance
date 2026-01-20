@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import { CardSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -123,8 +125,8 @@ function Reports({ token }) {
   };
 
   const handleAdminCheckIn = async () => {
-    const now = new Date();
-    const timeIn = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+    const phTime = toZonedTime(new Date(), 'Asia/Manila');
+    const timeIn = format(phTime, 'hh:mm a');
     try {
       await axios.post(`${API}/admin/checkin/${selectedIntern.id}`, 
         { time_in: timeIn },
@@ -140,8 +142,8 @@ function Reports({ token }) {
   };
 
   const handleAdminCheckOut = async (attendanceId) => {
-    const now = new Date();
-    const timeOut = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+    const phTime = toZonedTime(new Date(), 'Asia/Manila');
+    const timeOut = format(phTime, 'hh:mm a');
     try {
       await axios.put(`${API}/admin/checkout/${attendanceId}`, 
         { time_out: timeOut },
