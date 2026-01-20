@@ -1,6 +1,22 @@
 # Triple G BuildHub – OJT Attendance System
 
-A centralized attendance dashboard system for interns and coordinators with real-time monitoring, photo documentation, and automatic status tracking.
+> **A professional attendance management system designed for CTU students completing their On-the-Job Training (OJT) at Triple G BuildHub.**
+
+Streamline your OJT attendance tracking with real-time monitoring, photo verification, work documentation, and automated status reporting. Built for interns and coordinators to ensure transparent and accountable training sessions.
+
+---
+
+## 📌 About This Project
+
+This repository is specifically designed for **Cebu Technological University (CTU) students** who are undergoing their **On-the-Job Training (OJT) at Triple G BuildHub**. The system provides a centralized platform for:
+
+- ✅ **Automated attendance tracking** with photo verification
+- ✅ **Real-time monitoring** for coordinators and supervisors
+- ✅ **Work documentation** with file attachments for daily accomplishments
+- ✅ **Overtime management** with approval workflows
+- ✅ **Transparent reporting** for training hours and performance
+
+**Target Users:** CTU OJT Students, Triple G BuildHub Coordinators, Training Supervisors
 
 ## 🎨 Features
 
