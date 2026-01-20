@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
+import supabase from './supabaseClient';
 import Alert from './components/Alert';
 import { CardSkeleton } from './components/SkeletonLoader';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL || 'YOUR_SUPABASE_URL',
-  process.env.REACT_APP_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY'
-);
 
 const getTodayDate = () => {
   const now = new Date();

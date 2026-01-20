@@ -6,10 +6,22 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { format } = require('date-fns');
 const { toZonedTime } = require('date-fns-tz');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+
+// Email transporter setup
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: process.env.SMTP_PORT || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
 
 app.use(cors());
 app.use(express.json());
@@ -897,6 +909,108 @@ app.put('/api/admin/checkout/:attendanceId', auth, async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+    
+    if (!email || !newPassword) {
+      return res.status(400).json({ error: 'Email and new password are required' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    
+    // Get user by email
+    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    const user = users?.find(u => u.email === email);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update password
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      user.id,
+      { password: newPassword }
+    );
+    
+    if (updateError) {
+      console.error('Password update error:', updateError);
+      return res.status(500).json({ error: 'Failed to update password' });
+    }
+    
+    // Send confirmation email
+    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        await transporter.sendMail({
+          from: `"Triple G BuildHub" <${process.env.SMTP_USER}>`,
+          to: email,
+          subject: 'Password Reset Successful',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #FF7120;">Password Reset Successful</h2>
+              <p>Your password has been successfully reset.</p>
+              <p>You can now log in with your new password at:</p>
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" 
+                 style="display: inline-block; padding: 12px 24px; background: #FF7120; color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;">
+                Login Now
+              </a>
+              <p style="color: #666; font-size: 14px;">If you didn't request this change, please contact support immediately.</p>
+            </div>
+          `
+        });
+      } catch (emailError) {
+        console.error('Email send error:', emailError);
+      }
+    }
+    
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (err) {
+    console.error('Reset password exception:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    // Check if user exists
+    const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
+    const user = users?.find(u => u.email === email);
+    
+    if (!user) {
+      // Don't reveal if email exists or not for security
+      return res.json({ message: 'If the email exists, a reset link will be sent.' });
+    }
+    
+    // Generate password reset link
+    const { data, error: resetError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email: email
+    });
+    
+    if (resetError) {
+      console.error('Password reset error:', resetError);
+      return res.status(500).json({ error: 'Failed to generate reset link' });
+    }
+    
+    // In production, send this link via email
+    // For now, log it (you can integrate with email service later)
+    console.log('Password reset link:', data.properties.action_link);
+    
+    res.json({ 
+      message: 'Password reset link generated',
+      // Remove this in production - only for development
+      resetLink: data.properties.action_link 
+    });
+  } catch (err) {
+    console.error('Forgot password exception:', err);
     res.status(500).json({ error: err.message });
   }
 });

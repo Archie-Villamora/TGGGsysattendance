@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
+import supabase from './supabaseClient';
 import Lottie from 'lottie-react';
 import cityBuildingAnimation from './cityBuilding.json';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL || 'YOUR_SUPABASE_URL',
-  process.env.REACT_APP_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY'
-);
 
 function Login({ onLogin }) {
   const [isSignup, setIsSignup] = useState(false);
@@ -298,7 +294,7 @@ function Login({ onLogin }) {
                     />
                     <span>Remember me</span>
                   </label>
-                  <button type="button" className="text-primary text-xs md:text-sm hover:text-primary-dark hover:underline transition-colors" style={{background: 'none', border: 'none', cursor: 'pointer'}}>Forgot password?</button>
+                  <button type="button" onClick={() => window.location.href = '/forgot-password'} className="text-primary text-xs md:text-sm hover:text-primary-dark hover:underline transition-colors" style={{background: 'none', border: 'none', cursor: 'pointer'}}>Forgot password?</button>
                 </div>
               )}
 

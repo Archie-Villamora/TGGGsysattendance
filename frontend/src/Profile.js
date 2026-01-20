@@ -353,6 +353,7 @@ function Profile({ token, user, onLogout }) {
               />
             </div>
 
+            {user.role !== 'coordinator' && (
             <div style={{
               marginBottom: '1.5rem',
               padding: '1rem',
@@ -374,6 +375,7 @@ function Profile({ token, user, onLogout }) {
                 {totalHours.toFixed(2)} hrs
               </span>
             </div>
+            )}
 
             <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#00273C', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showPasswordSection ? '1rem' : '0' }}>

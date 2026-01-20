@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { LayoutDashboard, Clock, ListTodo, Bell } from 'lucide-react';
 import Login from './Login';
+import ForgotPassword from './ForgotPassword';
+import ResetPassword from './ResetPassword';
 import Dashboard from './Dashboard';
 import Profile from './Profile';
 import TodoList from './TodoList';
@@ -14,6 +16,7 @@ import './App.css';
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 function App() {
+  const [authView, setAuthView] = useState('login'); // 'login', 'forgot-password', 'reset-password'
 
   const [token, setToken] = useState(
     localStorage.getItem('token') || sessionStorage.getItem('token')
@@ -92,6 +95,7 @@ function App() {
   const handleLogin = (newToken, newUser) => {
     setToken(newToken);
     setUser(newUser);
+    setAuthView('login');
   };
 
   const handleLogout = () => {
@@ -100,6 +104,7 @@ function App() {
     setToken(null);
     setUser({});
     setCurrentPage('dashboard');
+    setAuthView('login');
   };
 
   const handleNotificationClick = async (notification) => {
@@ -132,7 +137,25 @@ function App() {
     if (showOvertimeMenu) setShowOvertimeMenu(false);
   };
 
+  // Handle URL-based routing for password reset
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path === '/forgot-password') {
+      setAuthView('forgot-password');
+    } else if (path === '/reset-password') {
+      setAuthView('reset-password');
+    } else {
+      setAuthView('login');
+    }
+  }, []);
+
   if (!token) {
+    if (authView === 'forgot-password') {
+      return <ForgotPassword onBack={() => { setAuthView('login'); window.history.pushState({}, '', '/'); }} />;
+    }
+    if (authView === 'reset-password') {
+      return <ResetPassword onSuccess={() => { setAuthView('login'); window.history.pushState({}, '', '/'); }} />;
+    }
     return <Login onLogin={handleLogin} />;
   }
 

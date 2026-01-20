@@ -201,8 +201,8 @@ function OvertimeRequests({ token }) {
               font-size: 9pt;
             }
             .field-value.short-date {
-              width: 120px;
-              display: inline-block;
+              flex: none;
+              width: 90px;
             }
             .periods-table {
               width: 100%;
