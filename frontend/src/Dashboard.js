@@ -537,14 +537,13 @@ function Dashboard({ token, user, onLogout }) {
         formData.append('attachments', file);
       });
 
-      const { data } = await axios.put(`${API}/attendance/checkout/${id}`, formData, {
+      await axios.put(`${API}/attendance/checkout/${id}`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
       });
 
-      // No penalties - just show success
       showAlert('success', 'Checked Out!', 'You have successfully checked out.');
 
       fetchAttendance();
