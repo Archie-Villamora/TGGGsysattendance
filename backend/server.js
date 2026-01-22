@@ -202,40 +202,36 @@ app.post('/api/attendance/checkin', auth, upload.single('photo'), async (req, re
     // Morning window baseline: 08:05, late <=09:00 deduct 1hr, >=09:00 deduct 2hr
     // Afternoon window baseline: 13:00, late >5min (13:05) deduct 1hr
     // Overtime window baseline: 19:05 (7:05 PM), late after 19:05 deduct 1hr
-    const morningBaseline = 8 * 60 + 5;
-    const morningLate = 9 * 60;
+    // Session baselines (5-minute grace period)
+    const morningBaseline = 8 * 60; // 8:00 AM
+    const morningGrace = 8 * 60 + 5; // 8:05 AM
     const afternoonBaseline = 13 * 60; // 1:00 PM
-    const afternoonLateThreshold = 13 * 60 + 5; // 1:05 PM
+    const afternoonGrace = 13 * 60 + 5; // 1:05 PM
     const overtimeBaseline = 19 * 60; // 7:00 PM
-    const overtimeLateThreshold = 19 * 60 + 5; // 7:05 PM
+    const overtimeGrace = 19 * 60 + 5; // 7:05 PM
 
     const isMorning = minutesSinceMidnight < 12 * 60;
     const isAfternoon = minutesSinceMidnight >= 12 * 60 && minutesSinceMidnight < 18 * 60;
     const isOvertime = minutesSinceMidnight >= 18 * 60;
 
-    let lateDeduction = 0;
     let lateMinutes = 0;
     let status = 'On-Time';
 
+    // Calculate late minutes (total late time for this session)
     if (isMorning) {
-      if (minutesSinceMidnight > morningBaseline) {
+      if (minutesSinceMidnight > morningGrace) {
         lateMinutes = minutesSinceMidnight - morningBaseline;
         status = 'Late';
-        lateDeduction = minutesSinceMidnight >= morningLate ? 2 : 1;
       }
     } else if (isAfternoon) {
-      // Afternoon: late if after 1:05 PM, deduct 1 hour
-      if (minutesSinceMidnight > afternoonLateThreshold) {
+      if (minutesSinceMidnight > afternoonGrace) {
         lateMinutes = minutesSinceMidnight - afternoonBaseline;
         status = 'Late';
-        lateDeduction = 1;
       }
     } else if (isOvertime) {
-      // Overtime: late if after 7:05 PM, deduct 1 hour
-      if (minutesSinceMidnight > overtimeLateThreshold) {
+      if (minutesSinceMidnight > overtimeGrace) {
         lateMinutes = minutesSinceMidnight - overtimeBaseline;
         status = 'Late';
-        lateDeduction = 1;
       }
     }
 
@@ -271,7 +267,7 @@ app.post('/api/attendance/checkin', auth, upload.single('photo'), async (req, re
         time_in,
         status,
         photo_path: photoUrl,
-        late_deduction_hours: lateDeduction
+        late_minutes: lateMinutes
       })
       .select()
       .single();
@@ -280,7 +276,7 @@ app.post('/api/attendance/checkin', auth, upload.single('photo'), async (req, re
       console.error('Checkin error:', error);
       return res.status(500).json({ error: error.message });
     }
-    res.json({ id: data.id, status, lateMinutes, lateDeduction });
+    res.json({ id: data.id, status, lateMinutes });
   } catch (err) {
     console.error('Checkin exception:', err);
     res.status(500).json({ error: err.message });
@@ -323,30 +319,28 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
     const checkInMinutes = hIn * 60 + mIn;
     const checkOutMinutes = hOut * 60 + mOut;
 
-    let recordedTimeOut;
     let standardCheckoutMinutes;
-    let earlyCheckoutDeduction = 0;
+    let baselineStartMinutes;
 
     if (checkInMinutes < 12 * 60) {
-      // Morning session - standard checkout 12:00 PM
-      recordedTimeOut = '12:00 PM';
+      // Morning session - baseline 8:00 AM, standard checkout 12:00 PM
+      baselineStartMinutes = 8 * 60;
       standardCheckoutMinutes = 12 * 60;
     } else if (checkInMinutes >= 12 * 60 && checkInMinutes < 18 * 60) {
-      // Afternoon session - standard checkout 5:00 PM
-      recordedTimeOut = '05:00 PM';
+      // Afternoon session - baseline 1:00 PM, standard checkout 5:00 PM
+      baselineStartMinutes = 13 * 60;
       standardCheckoutMinutes = 17 * 60;
     } else {
-      // Overtime session - standard checkout 10:00 PM
-      recordedTimeOut = '10:00 PM';
+      // Overtime session - baseline 7:00 PM, standard checkout 10:00 PM
+      baselineStartMinutes = 19 * 60;
       standardCheckoutMinutes = 22 * 60;
     }
 
-    // Calculate early checkout deduction
-    if (checkOutMinutes < standardCheckoutMinutes) {
-      const minutesEarly = standardCheckoutMinutes - checkOutMinutes;
-      // Deduct 1 hour for every hour early (rounded up)
-      earlyCheckoutDeduction = Math.ceil(minutesEarly / 60);
-    }
+    // Calculate total hours worked from BASELINE, not actual check-in
+    // Cap at standard checkout time to prevent exceeding session limits
+    let totalMinutesWorked = Math.min(checkOutMinutes, standardCheckoutMinutes) - baselineStartMinutes;
+    if (totalMinutesWorked < 0) totalMinutesWorked += 24 * 60; // Handle overnight
+    if (totalMinutesWorked < 0) totalMinutesWorked = 0; // Prevent negative
 
     let attachmentUrls = [];
     if (req.files && req.files.length > 0) {
@@ -375,9 +369,8 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
     }
 
     const updateData = {
-      time_out: recordedTimeOut,
-      actual_time_out: actual_time_out,
-      early_checkout_deduction: earlyCheckoutDeduction,
+      time_out: actual_time_out,
+      total_minutes_worked: totalMinutesWorked,
       work_documentation
     };
     if (attachmentUrls.length > 0) {
@@ -394,7 +387,7 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
       console.error('Checkout error:', error);
       return res.status(500).json({ error: error.message });
     }
-    res.json({ success: true, earlyCheckoutDeduction });
+    res.json({ success: true, totalMinutesWorked });
   } catch (err) {
     console.error('Checkout exception:', err);
     res.status(500).json({ error: err.message });
@@ -1981,7 +1974,7 @@ app.post('/api/admin/checkin/:userId', auth, async (req, res) => {
         date: targetDate,
         time_in,
         status: 'On-Time',
-        late_deduction_hours: 0
+        late_minutes: 0
       })
       .select()
       .single();

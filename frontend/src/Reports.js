@@ -17,6 +17,7 @@ function Reports({ token }) {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminAction, setAdminAction] = useState({ type: '', record: null });
   const [alert, setAlert] = useState(null);
+  const [expandedRecords, setExpandedRecords] = useState({});
 
   useEffect(() => {
     const loadData = async () => {
@@ -61,69 +62,118 @@ function Reports({ token }) {
 
   const fetchInternAttendance = async (internId) => {
     const filtered = allAttendance.filter(a => a.user_id === internId);
-    setAttendance(filtered);
+    
+    // Consolidate by date
+    const consolidatedByDate = {};
+    filtered.forEach(entry => {
+      if (!consolidatedByDate[entry.date]) {
+        consolidatedByDate[entry.date] = {
+          date: entry.date,
+          user_id: entry.user_id,
+          morning_time_in: null,
+          morning_time_out: null,
+          afternoon_time_in: null,
+          afternoon_time_out: null,
+          ot_time_in: null,
+          ot_time_out: null,
+          total_minutes_worked: 0,
+          total_late_minutes: 0,
+          work_documentation: null,
+          attachments: [],
+          photo_path: null
+        };
+      }
+      
+      const record = consolidatedByDate[entry.date];
+      const session = determineSession(entry.time_in);
+      
+      if (session === 'Morning') {
+        record.morning_time_in = entry.time_in;
+        record.morning_time_out = entry.time_out;
+      } else if (session === 'Afternoon') {
+        record.afternoon_time_in = entry.time_in;
+        record.afternoon_time_out = entry.time_out;
+      } else if (session === 'Overtime') {
+        record.ot_time_in = entry.time_in;
+        record.ot_time_out = entry.time_out;
+      }
+      
+      record.total_minutes_worked += (entry.total_minutes_worked || (entry.time_out ? 240 : 0));
+      record.total_late_minutes += (entry.late_minutes || 0);
+      
+      if (entry.work_documentation) record.work_documentation = entry.work_documentation;
+      if (entry.attachments) record.attachments = [...record.attachments, ...entry.attachments];
+      if (entry.photo_path) record.photo_path = entry.photo_path;
+    });
+    
+    setAttendance(Object.values(consolidatedByDate).sort((a, b) => new Date(b.date) - new Date(a.date)));
     setSelectedIntern(interns.find(i => i.id === internId));
     setShowModal(true);
   };
 
-  const parseTime = (timeStr) => {
-    if (!timeStr) return null;
-    const [time, period] = timeStr.split(' ');
-    let [hours, minutes] = time.split(':').map(Number);
-    if (period === 'PM' && hours !== 12) hours += 12;
-    if (period === 'AM' && hours === 12) hours = 0;
-    return hours * 60 + minutes;
+  const determineSession = (timeIn) => {
+    if (!timeIn) return null;
+    const [time] = timeIn.split(' ');
+    const [h] = time.split(':');
+    const hour = parseInt(h, 10);
+    if (hour < 12) return 'Morning';
+    if (hour >= 12 && hour < 18) return 'Afternoon';
+    return 'Overtime';
   };
+
+  const formatTime = (timeStr) => {
+    if (!timeStr || timeStr === '-') return '-';
+
+    // If already in AM/PM format, return as is
+    if (timeStr.includes('AM') || timeStr.includes('PM')) {
+      return timeStr;
+    }
+
+    // Convert 24-hour to 12-hour format
+    const [hours, minutes] = timeStr.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  const calculateRecordMetrics = (record) => {
+    return {
+      hours: Math.floor(record.total_minutes_worked / 60),
+      minutes: record.total_minutes_worked % 60,
+      lateMinutes: record.total_late_minutes
+    };
+  };
+
+
 
   const calculateStats = (internId) => {
     const internAttendance = allAttendance.filter(a => a.user_id === internId);
     
-    // Count unique dates instead of total records
     const uniqueDates = new Set(internAttendance.map(a => a.date));
     const total = uniqueDates.size;
     
     const onTime = internAttendance.filter(a => a.status === 'On-Time').length;
     const late = internAttendance.filter(a => a.status === 'Late').length;
-    const totalLateHours = internAttendance.reduce((sum, a) => sum + (a.late_deduction_hours || 0), 0);
     
-    // Calculate hours worked within official work periods
-    let totalMinutes = 0;
+    let totalLateMinutes = 0;
+    let totalMinutesWorked = 0;
+    
     internAttendance.forEach(record => {
-      // Only count completed sessions (has both time_in and time_out)
-      if (record.time_in && record.time_out) {
-        const inMinutes = parseTime(record.time_in);
-        const outMinutes = parseTime(record.time_out);
-        
-        if (inMinutes !== null && outMinutes !== null) {
-          // Morning session: 8:00 AM - 12:00 PM
-          if (inMinutes < 12 * 60) {
-            const effectiveEnd = Math.min(outMinutes, 12 * 60);
-            // Give full hours from 8 AM. Late deduction already applied.
-            totalMinutes += Math.max(0, effectiveEnd - (8 * 60));
-          }
-          // Afternoon session: 1:00 PM - 5:00 PM
-          else {
-            const effectiveEnd = Math.min(outMinutes, 17 * 60);
-            // Give full hours from 1 PM. Late deduction already applied.
-            totalMinutes += Math.max(0, effectiveEnd - (13 * 60));
-          }
-        }
-      }
-      // Add overtime hours (7:00 PM - 10:00 PM)
-      if (record.ot_time_in && record.ot_time_out) {
-        const otInMinutes = parseTime(record.ot_time_in);
-        const otOutMinutes = parseTime(record.ot_time_out);
-        if (otInMinutes !== null && otOutMinutes !== null) {
-          const effectiveOtStart = Math.max(otInMinutes, 19 * 60);
-          const effectiveOtEnd = Math.min(otOutMinutes, 22 * 60);
-          totalMinutes += Math.max(0, effectiveOtEnd - effectiveOtStart);
-        }
+      totalLateMinutes += (record.late_minutes || 0);
+      
+      if (record.total_minutes_worked) {
+        totalMinutesWorked += record.total_minutes_worked;
+      } else if (record.time_out) {
+        // Fallback: estimate 4 hours per session for old records
+        totalMinutesWorked += 240;
       }
     });
     
-    const totalHours = Math.round((totalMinutes / 60) - totalLateHours);
+    const totalHours = Math.floor(totalMinutesWorked / 60);
+    const totalLateHours = Math.floor(totalLateMinutes / 60);
     
-    return { total, onTime, late, totalLateHours, totalHours };
+    return { total, onTime, late, totalLateMinutes, totalLateHours, totalHours };
   };
 
   const handleAdminCheckIn = async () => {
@@ -259,8 +309,8 @@ function Reports({ token }) {
                     <p style={{ fontSize: '1.5rem', fontWeight: '600', color: '#ff9d5c', margin: 0 }}>{stats.late}</p>
                   </div>
                   <div style={{ background: '#00273C', padding: '0.75rem', borderRadius: '8px', gridColumn: '1 / -1' }}>
-                    <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>Late Deductions</p>
-                    <p style={{ fontSize: '1.5rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{stats.totalLateHours}h</p>
+                    <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>Total Late</p>
+                    <p style={{ fontSize: '1.5rem', fontWeight: '600', color: '#ff9d5c', margin: 0 }}>{stats.totalLateMinutes}m ({stats.totalLateHours}h)</p>
                   </div>
                 </div>
               </div>
@@ -336,17 +386,36 @@ function Reports({ token }) {
             </div>
             <div style={{ padding: '2rem', maxHeight: '70vh', overflow: 'auto' }}>
               <div style={{ display: 'grid', gap: '1rem' }}>
-                {attendance.map(record => (
-                  <div key={record.id} style={{
+                {attendance.map(record => {
+                  const isExpanded = expandedRecords[record.date];
+                  const metrics = calculateRecordMetrics(record);
+                  return (
+                  <div key={record.date} style={{
                     background: '#00273C',
                     borderRadius: '12px',
                     padding: '1.5rem',
                     border: '1px solid rgba(255, 255, 255, 0.1)',
                     transition: 'all 0.2s'
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                      <div>
-                        <h4 style={{ color: '#ffffff', margin: '0 0 0.5rem 0', fontSize: '1.1rem' }}>
+                    {/* Header with toggle and photo */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        {record.photo_path && (
+                          <img
+                            src={record.photo_path}
+                            alt="Check-in"
+                            style={{
+                              width: '50px',
+                              height: '50px',
+                              borderRadius: '8px',
+                              objectFit: 'cover',
+                              border: '2px solid #FF7120',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => window.open(record.photo_path, '_blank')}
+                          />
+                        )}
+                        <h4 style={{ color: '#ffffff', margin: 0, fontSize: '1.1rem' }}>
                           {new Date(record.date).toLocaleDateString('en-US', { 
                             weekday: 'long', 
                             year: 'numeric', 
@@ -354,83 +423,144 @@ function Reports({ token }) {
                             day: 'numeric' 
                           })}
                         </h4>
-                        <span className={`status-badge ${record.status === 'On-Time' ? 'status-ontime' : 'status-late'}`}>
-                          {record.status}
-                        </span>
-                        {!record.time_out && (
-                          <button
-                            onClick={() => {
-                              setAdminAction({ type: 'checkout', record });
-                              setShowAdminModal(true);
-                            }}
-                            style={{
-                              marginLeft: '0.5rem',
-                              background: '#FF7120',
-                              border: 'none',
-                              color: 'white',
-                              padding: '0.35rem 0.75rem',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              fontSize: '0.8rem',
-                              fontWeight: '600'
-                            }}
-                          >
-                            Check Out
-                          </button>
-                        )}
                       </div>
-                      {record.photo_path && (
-                        <img
-                          src={record.photo_path}
-                          alt="Check-in"
-                          style={{
-                            width: '60px',
-                            height: '60px',
-                            borderRadius: '8px',
-                            objectFit: 'cover',
-                            border: '2px solid #FF7120',
-                            cursor: 'pointer'
-                          }}
-                          onClick={() => window.open(record.photo_path, '_blank')}
-                        />
+                      <button
+                        onClick={() => setExpandedRecords(prev => ({ ...prev, [record.date]: !prev[record.date] }))}
+                        className="view-details-btn"
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #FF7120',
+                          color: '#FF7120',
+                          padding: '0.35rem 0.5rem',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.85rem',
+                          fontWeight: '600',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem'
+                        }}
+                      >
+                        {isExpanded ? (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="18 15 12 9 6 15"></polyline>
+                          </svg>
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#28a745', fontWeight: '600' }}>
+                        Total: {metrics.hours}h {metrics.minutes}m
+                      </span>
+                      {metrics.lateMinutes > 0 && (
+                        <span style={{ fontSize: '0.85rem', color: '#ff9d5c', fontWeight: '600' }}>
+                          Late: {metrics.lateMinutes}m
+                        </span>
                       )}
                     </div>
                     
+                    {isExpanded && (
+                    <>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                       <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
-                        <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>Time In</p>
-                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{record.time_in || '-'}</p>
+                        <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>Morning In</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{formatTime(record.morning_time_in) || '-'}</p>
                       </div>
                       <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
-                        <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>Time Out</p>
-                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{record.time_out || '-'}</p>
+                        <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>Morning Out</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{formatTime(record.morning_time_out) || '-'}</p>
+                      </div>
+                      <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
+                        <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>Afternoon In</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{formatTime(record.afternoon_time_in) || '-'}</p>
+                      </div>
+                      <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
+                        <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>Afternoon Out</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{formatTime(record.afternoon_time_out) || '-'}</p>
                       </div>
                       <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>OT In</p>
-                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{record.ot_time_in || '-'}</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{formatTime(record.ot_time_in) || '-'}</p>
                       </div>
                       <div style={{ background: '#001a2b', padding: '0.75rem', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0 0 0.25rem 0' }}>OT Out</p>
-                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{record.ot_time_out || '-'}</p>
+                        <p style={{ fontSize: '1rem', fontWeight: '600', color: '#e8eaed', margin: 0 }}>{formatTime(record.ot_time_out) || '-'}</p>
                       </div>
-                      {record.late_deduction_hours > 0 && (
-                        <div style={{ background: '#2d1b1b', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 157, 92, 0.3)' }}>
-                          <p style={{ fontSize: '0.75rem', color: '#ff9d5c', margin: '0 0 0.25rem 0' }}>Late Deduction</p>
-                          <p style={{ fontSize: '1rem', fontWeight: '600', color: '#ff9d5c', margin: 0 }}>{record.late_deduction_hours}h</p>
-                        </div>
-                      )}
                     </div>
+
+
                     
                     {record.work_documentation && (
-                      <div style={{ background: '#001a2b', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)' }}>
+                      <div style={{ background: '#001a2b', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)', marginBottom: '1rem' }}>
                         <p style={{ fontSize: '0.75rem', color: '#FF7120', margin: '0 0 0.5rem 0', fontWeight: '600' }}>Work Documentation</p>
-                        <p style={{ fontSize: '0.9rem', color: '#e8eaed', margin: 0, lineHeight: '1.5' }}>
-                          {record.work_documentation}
-                        </p>
+                        <div style={{ fontSize: '0.9rem', color: '#e8eaed', lineHeight: '1.5', maxHeight: '150px', overflowY: 'auto' }} dangerouslySetInnerHTML={{ __html: record.work_documentation }} />
                       </div>
                     )}
+
+                    {record.attachments && record.attachments.length > 0 && (
+                      <div style={{ background: '#001a2b', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255, 113, 32, 0.2)' }}>
+                        <p style={{ fontSize: '0.75rem', color: '#FF7120', margin: '0 0 0.75rem 0', fontWeight: '600' }}>Attachments</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {record.attachments.map((url, idx) => {
+                            const fileName = url.split('/').pop().split('?')[0];
+                            const decodedName = decodeURIComponent(fileName);
+                            const ext = fileName.split('.').pop().toLowerCase();
+                            const getFileIcon = (extension) => {
+                              if (['png', 'jpg', 'jpeg'].includes(extension)) return '🖼️';
+                              if (['pdf'].includes(extension)) return '📄';
+                              if (['doc', 'docx'].includes(extension)) return '📝';
+                              if (['xls', 'xlsx'].includes(extension)) return '📊';
+                              if (['txt'].includes(extension)) return '📃';
+                              return '📎';
+                            };
+                            return (
+                              <a
+                                key={idx}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={decodedName}
+                                style={{
+                                  color: '#FF7120',
+                                  textDecoration: 'none',
+                                  fontSize: '0.9rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: '0.5rem 0.75rem',
+                                  background: 'rgba(255, 113, 32, 0.1)',
+                                  borderRadius: '6px',
+                                  border: '1px solid rgba(255, 113, 32, 0.2)',
+                                  transition: 'all 0.2s',
+                                  cursor: 'pointer'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = 'rgba(255, 113, 32, 0.2)';
+                                  e.currentTarget.style.borderColor = '#FF7120';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'rgba(255, 113, 32, 0.1)';
+                                  e.currentTarget.style.borderColor = 'rgba(255, 113, 32, 0.2)';
+                                }}
+                              >
+                                <span style={{ fontSize: '1.2rem' }}>{getFileIcon(ext)}</span>
+                                <span style={{ flex: 1 }}>{decodedName}</span>
+                              </a>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    </>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
