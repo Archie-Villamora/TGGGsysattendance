@@ -4,6 +4,8 @@ import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import Alert from './components/Alert';
 import { TableSkeleton, CardSkeleton } from './components/SkeletonLoader';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -283,7 +285,8 @@ function Dashboard({ token, user, onLogout }) {
   };
 
   const checkOut = async (id) => {
-    if (!workDoc.trim()) {
+    const plainText = workDoc.replace(/<[^>]*>/g, '').trim();
+    if (!plainText) {
       showAlert('error', 'Work Documentation Required', 'Please describe your work before checking out!');
       return;
     }
@@ -500,25 +503,27 @@ function Dashboard({ token, user, onLogout }) {
               <label style={{display: 'block', marginBottom: '0.5rem', color: '#a0a4a8', fontSize: '0.9rem'}}>
                 What did you accomplish today?
               </label>
-              <textarea
-                value={workDoc}
-                onChange={(e) => setWorkDoc(e.target.value)}
-                placeholder="Example: Completed database design, attended team meeting, fixed bug #123..."
-                disabled={!todaysOpen}
-                style={{
-                  width: '100%',
-                  minHeight: '150px',
-                  padding: '0.75rem',
-                  background: '#00273C',
-                  color: '#e8eaed',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  fontSize: '0.9rem',
-                  resize: 'vertical',
-                  fontFamily: 'inherit',
-                  opacity: todaysOpen ? 1 : 0.5
-                }}
-              />
+              <div style={{opacity: todaysOpen ? 1 : 0.5, pointerEvents: todaysOpen ? 'auto' : 'none'}}>
+                <ReactQuill
+                  value={workDoc}
+                  onChange={setWorkDoc}
+                  readOnly={!todaysOpen}
+                  placeholder="Example: Completed database design, attended team meeting, fixed bug #123..."
+                  theme="snow"
+                  modules={{
+                    toolbar: [
+                      ['bold', 'italic', 'underline'],
+                      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                      ['clean']
+                    ]
+                  }}
+                  style={{
+                    background: '#00273C',
+                    borderRadius: '8px',
+                    minHeight: '150px'
+                  }}
+                />
+              </div>
               
               <div style={{marginTop: '1rem'}}>
                 <label style={{display: 'block', marginBottom: '0.5rem', color: '#a0a4a8', fontSize: '0.9rem'}}>
@@ -881,9 +886,10 @@ function Dashboard({ token, user, onLogout }) {
             border: '1px solid rgba(255, 113, 32, 0.2)'
           }}>
             <h3 style={{ color: '#ffffff', marginBottom: '1rem' }}>Work Documentation</h3>
-            <p style={{ color: '#e8eaed', lineHeight: '1.6', marginBottom: '1.5rem' }}>
-              {modalDoc}
-            </p>
+            <div 
+              style={{ color: '#e8eaed', lineHeight: '1.6', marginBottom: '1.5rem' }}
+              dangerouslySetInnerHTML={{ __html: modalDoc }}
+            />
             <button 
               onClick={() => setModalDoc(null)}
               style={{

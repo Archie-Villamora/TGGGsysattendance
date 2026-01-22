@@ -9,8 +9,10 @@
     "date-fns-tz": "^3.2.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.562.0",
+    "quill": "^2.0.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-quill": "^2.0.0",
     "react-scripts": "5.0.1"
   },
   "scripts": {
