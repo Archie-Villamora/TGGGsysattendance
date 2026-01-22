@@ -1157,6 +1157,17 @@ app.get('/api/todos', auth, async (req, res) => {
         // Global tab shows: global todos + confirmed group todos (not completed) + assigned tasks (not completed)
         // Exclude: personal, unconfirmed group, completed tasks
         query = query.or('todo_type.eq.global,and(todo_type.eq.group,is_confirmed.eq.true,completed.eq.false),and(todo_type.eq.assigned,completed.eq.false)');
+      } else if (type === 'coordinator_overview') {
+        // Coordinator Panel: Show ALL assigned tasks + ALL confirmed group tasks
+        if (profile?.role !== 'coordinator') {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // We can't easily express "ALL assigned OR (group AND confirmed)" with a single supabase OR query because of the mixed logic on is_confirmed
+        // But we can use: type=assigned OR (type=group AND is_confirmed=true)
+        // using query.or allows comma separated conditions.
+
+        query = query.or('todo_type.eq.assigned,and(todo_type.eq.group,is_confirmed.eq.true)');
       }
     } else {
       // No type filter - get all accessible todos
@@ -1199,6 +1210,10 @@ app.post('/api/todos', auth, async (req, res) => {
       todo_type,
       is_confirmed: true // Default to confirmed for personal todos
     };
+
+    // Add dates if provided (valid for all types, but specifically requested for personal)
+    if (start_date) todoData.start_date = start_date;
+    if (deadline) todoData.deadline = deadline;
 
     // Handle different todo types
     if (todo_type === 'global') {
