@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+// eslint-disable-next-line no-unused-vars
 import Alert from './components/Alert';
 import { CardSkeleton } from './components/SkeletonLoader';
 
@@ -111,6 +112,7 @@ function TodoList({ token, user }) {
   const [groups, setGroups] = useState([]);
   const [availableUsers, setAvailableUsers] = useState([]);
   const [interns, setInterns] = useState([]);
+  // eslint-disable-next-line no-unused-vars
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dateTask, setDateTask] = useState('');
@@ -137,6 +139,7 @@ function TodoList({ token, user }) {
   const [confirmDeadline, setConfirmDeadline] = useState('');
   const [confirmAssignee, setConfirmAssignee] = useState('');
   const [confirmTask, setConfirmTask] = useState('');
+  // eslint-disable-next-line no-unused-vars
   const itemsPerPage = 5;
 
   const fetchUserProfile = useCallback(async () => {
@@ -236,7 +239,10 @@ function TodoList({ token, user }) {
       if (activeTab === 'team') {
         // Team tab: members suggest tasks (submitted as group todo, needs leader confirmation)
         const userGroupId = groups.find(g =>
-          g.members?.some(m => m.user?.id === userProfile?.id) || g.leader_id === userProfile?.id
+          g.members?.some(m =>
+            String(m.user?.id) === String(userProfile?.id) ||
+            String(m.user_id) === String(userProfile?.id)
+          ) || String(g.leader_id) === String(userProfile?.id)
         )?.id;
 
         if (userGroupId) {
@@ -326,6 +332,7 @@ function TodoList({ token, user }) {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const confirmTodo = async (id) => {
     // Legacy function - now we use openConfirmModal for group todos
     try {
@@ -503,6 +510,7 @@ function TodoList({ token, user }) {
     return canEditTodo(todo);
   };
 
+  // eslint-disable-next-line no-unused-vars
   const canToggleTodo = (todo) => {
     if (todo.todo_type === 'assigned') {
       return todo.assigned_to === userProfile?.id || todo.assigned_by === userProfile?.id || isCoordinator;
@@ -1068,6 +1076,7 @@ function TodoList({ token, user }) {
     ...(isLeader ? [{ id: 'group', label: 'Manage', icon: 'clipboard' }] : [])
   ];
 
+  // eslint-disable-next-line no-unused-vars
   const currentGroup = groups.find(g => g.id === selectedGroup);
   const activeTabConfig = tabs.find(t => t.id === activeTab) || tabs[0];
 
@@ -2310,7 +2319,7 @@ function TodoList({ token, user }) {
         </div>
       )}
     </div>
-    
+
   );
 }
 

@@ -624,6 +624,7 @@ app.get('/api/groups', auth, async (req, res) => {
         *,
         leader:profiles!groups_leader_id_fkey(id, full_name),
         members:group_members(
+          user_id,
           user:profiles(id, full_name)
         )
       `);
