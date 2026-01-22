@@ -617,6 +617,7 @@ app.get('/api/groups', auth, async (req, res) => {
         *,
         leader:profiles!groups_leader_id_fkey(id, full_name),
         members:group_members(
+          user_id,
           user:profiles(id, full_name)
         )
       `);
@@ -980,14 +981,22 @@ app.get('/api/todos', auth, async (req, res) => {
       } else if (type === 'group') {
         // GROUP TAB (Leaders only): Show pending suggestions + pending completions
         // Only accessible to leaders
+        console.log('Group tab requested by user:', req.user.id);
+        console.log('Profile is_leader:', profile?.is_leader);
+        console.log('Leader group IDs:', leaderGroupIds);
+
         if (!profile?.is_leader && leaderGroupIds.length === 0) {
+          console.log('User is not a leader, returning empty array');
           return res.json([]);
         }
 
         const groupIds = leaderGroupIds;
         if (groupIds.length === 0) {
+          console.log('No leader group IDs found, returning empty array');
           return res.json([]);
         }
+
+        console.log('Fetching pending suggestions for groups:', groupIds);
 
         // Get unconfirmed group todos (pending suggestions)
         const { data: pendingSuggestions, error: suggestError } = await supabaseAdmin
@@ -1004,6 +1013,9 @@ app.get('/api/todos', auth, async (req, res) => {
           .in('group_id', groupIds)
           .eq('is_confirmed', false)
           .order('created_at', { ascending: false });
+
+        console.log('Pending suggestions found:', pendingSuggestions?.length || 0);
+        if (suggestError) console.log('Suggest error:', suggestError);
 
         if (suggestError) return res.status(500).json({ error: suggestError.message });
 
@@ -1306,6 +1318,7 @@ app.post('/api/todos', auth, async (req, res) => {
       todoData.group_id = group_id;
       todoData.suggested_by = req.user.id;
       todoData.is_confirmed = isLeader; // Auto-confirm if created by leader
+      console.log('Creating group todo:', { group_id, suggested_by: req.user.id, is_confirmed: isLeader, isLeader });
     } else if (todo_type === 'assigned') {
       // Only leaders or coordinators can assign tasks
       const isCoordinator = profile?.role === 'coordinator';
