@@ -301,8 +301,8 @@ function convertTo24Hour(time12h) {
 
 app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5), async (req, res) => {
   try {
-    const { time_out, work_documentation } = req.body;
-    console.log('Checkout request:', { id: req.params.id, time_out, work_documentation, user_id: req.user.id });
+    const { actual_time_out, work_documentation } = req.body;
+    console.log('Checkout request:', { id: req.params.id, actual_time_out, work_documentation, user_id: req.user.id });
     
     const { data: entry, error: entryError } = await supabaseAdmin
       .from('attendance')
@@ -313,6 +313,39 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
 
     if (entryError || !entry) {
       return res.status(404).json({ error: 'Attendance entry not found.' });
+    }
+
+    // Determine session and calculate early checkout deduction
+    const timeIn24 = convertTo24Hour(entry.time_in);
+    const actualTimeOut24 = convertTo24Hour(actual_time_out);
+    const [hIn, mIn] = timeIn24.split(':').map(v => parseInt(v, 10));
+    const [hOut, mOut] = actualTimeOut24.split(':').map(v => parseInt(v, 10));
+    const checkInMinutes = hIn * 60 + mIn;
+    const checkOutMinutes = hOut * 60 + mOut;
+    
+    let recordedTimeOut;
+    let standardCheckoutMinutes;
+    let earlyCheckoutDeduction = 0;
+    
+    if (checkInMinutes < 12 * 60) {
+      // Morning session - standard checkout 12:00 PM
+      recordedTimeOut = '12:00 PM';
+      standardCheckoutMinutes = 12 * 60;
+    } else if (checkInMinutes >= 12 * 60 && checkInMinutes < 18 * 60) {
+      // Afternoon session - standard checkout 5:00 PM
+      recordedTimeOut = '05:00 PM';
+      standardCheckoutMinutes = 17 * 60;
+    } else {
+      // Overtime session - standard checkout 10:00 PM
+      recordedTimeOut = '10:00 PM';
+      standardCheckoutMinutes = 22 * 60;
+    }
+
+    // Calculate early checkout deduction
+    if (checkOutMinutes < standardCheckoutMinutes) {
+      const minutesEarly = standardCheckoutMinutes - checkOutMinutes;
+      // Deduct 1 hour for every hour early (rounded up)
+      earlyCheckoutDeduction = Math.ceil(minutesEarly / 60);
     }
 
     let attachmentUrls = [];
@@ -341,7 +374,12 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
       }
     }
 
-    const updateData = { time_out, work_documentation };
+    const updateData = { 
+      time_out: recordedTimeOut,
+      actual_time_out: actual_time_out,
+      early_checkout_deduction: earlyCheckoutDeduction,
+      work_documentation 
+    };
     if (attachmentUrls.length > 0) {
       updateData.attachments = attachmentUrls;
     }
@@ -356,7 +394,7 @@ app.put('/api/attendance/checkout/:id', auth, uploadDocs.array('attachments', 5)
       console.error('Checkout error:', error);
       return res.status(500).json({ error: error.message });
     }
-    res.json({ success: true });
+    res.json({ success: true, earlyCheckoutDeduction });
   } catch (err) {
     console.error('Checkout exception:', err);
     res.status(500).json({ error: err.message });

@@ -303,11 +303,6 @@ function Dashboard({ token, user, onLogout }) {
   };
 
   const checkOut = async (id) => {
-    if (!canCheckOutNow(todaysOpen)) {
-      showAlert('error', 'Not available', 'Time Out is available 12PM-5PM for morning session, and after 5PM for afternoon session.');
-      return;
-    }
-
     if (!workDoc.trim()) {
       showAlert('error', 'Work Documentation Required', 'Please describe your work before checking out!');
       return;
@@ -315,22 +310,29 @@ function Dashboard({ token, user, onLogout }) {
 
     setButtonLoading(true);
     try {
-      const timeOut = getPhilippinesTime();
+      const actualTimeOut = getPhilippinesTime();
       const formData = new FormData();
-      formData.append('time_out', timeOut);
+      formData.append('actual_time_out', actualTimeOut);
       formData.append('work_documentation', workDoc);
       
       attachments.forEach(file => {
         formData.append('attachments', file);
       });
 
-      await axios.put(`${API}/attendance/checkout/${id}`, formData, {
+      const { data } = await axios.put(`${API}/attendance/checkout/${id}`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
       });
-      showAlert('success', 'Checked Out!', 'You have successfully checked out.');
+      
+      if (data.earlyCheckoutDeduction > 0) {
+        showAlert('warning', 'Early Checkout', 
+          `You checked out early. ${data.earlyCheckoutDeduction} hour(s) deducted from this session.`);
+      } else {
+        showAlert('success', 'Checked Out!', 'You have successfully checked out.');
+      }
+      
       fetchAttendance();
       setWorkDoc('');
       setAttachments([]);
@@ -596,27 +598,19 @@ function Dashboard({ token, user, onLogout }) {
               </div>
               
               <p style={{color: '#6b7280', fontSize: '0.8rem', marginTop: '0.5rem'}}>
-                    {todaysOpen
-                      ? canCheckOutNow(todaysOpen)
-                        ? 'You can check out now'
-                        : todaysOpen.session === 'Overtime'
-                          ? 'Time Out available at 10PM for overtime session'
-                          : todaysOpen.session === 'Morning'
-                            ? 'Time Out available at 12PM for morning session'
-                            : 'Time Out available at 5PM for afternoon session'
-                      : 'Check in first to document your work'}
+                {todaysOpen ? 'You can check out anytime after checking in' : 'Check in first to document your work'}
               </p>
               <div style={{ display: 'flex', gap: '20px', marginTop: '1rem', flexWrap: 'wrap' }}>
                 <button 
                   onClick={() => todaysOpen && checkOut(todaysOpen.id)}
-                  disabled={buttonLoading || !todaysOpen || !canCheckOutNow(todaysOpen)}
+                  disabled={buttonLoading || !todaysOpen}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '8px',
-                    opacity: (!todaysOpen || !canCheckOutNow(todaysOpen)) ? 0.6 : 1,
-                    cursor: (!todaysOpen || !canCheckOutNow(todaysOpen)) ? 'not-allowed' : 'pointer'
+                    opacity: !todaysOpen ? 0.6 : 1,
+                    cursor: !todaysOpen ? 'not-allowed' : 'pointer'
                   }}
                 >
                   {buttonLoading ? (
@@ -758,8 +752,15 @@ function Dashboard({ token, user, onLogout }) {
                     </span>
                   </td>
                   <td>
-                    {a.late_deduction_hours > 0 ? (
-                      <span style={{color: '#ff9d5c', fontWeight: '600'}}>-{a.late_deduction_hours}hr</span>
+                    {(a.late_deduction_hours > 0 || a.early_checkout_deduction > 0) ? (
+                      <div style={{display: 'flex', flexDirection: 'column', gap: '2px'}}>
+                        {a.late_deduction_hours > 0 && (
+                          <span style={{color: '#ff9d5c', fontWeight: '600', fontSize: '0.85rem'}}>Late: -{a.late_deduction_hours}hr</span>
+                        )}
+                        {a.early_checkout_deduction > 0 && (
+                          <span style={{color: '#ff9d5c', fontWeight: '600', fontSize: '0.85rem'}}>Early: -{a.early_checkout_deduction}hr</span>
+                        )}
+                      </div>
                     ) : '-'}
                   </td>
                   <td>
