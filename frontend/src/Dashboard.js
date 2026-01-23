@@ -156,12 +156,6 @@ function Dashboard({ token, user, onLogout }) {
     return { lateMinutes, hoursWorked };
   };
 
-  const canCheckOutNow = (entry) => {
-    if (!entry) return false;
-    // Allow checkout anytime after check-in for all sessions
-    return true;
-  };
-
   const showAlert = (type, title, message) => {
     setAlert({ type, title, message });
   };
