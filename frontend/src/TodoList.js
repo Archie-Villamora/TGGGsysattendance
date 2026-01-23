@@ -986,7 +986,7 @@ function TodoList({ token, user }) {
                       {ongoingTodos.length === 0 ? (
                         <p style={{ textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px' }}>No ongoing tasks for this date.</p>
                       ) : (
-                        ongoingTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={false} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} disabled={actionInProgress} />)
+                        ongoingTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={false} activeTab={activeTab === 'team' && teamSubTab === 'manage' ? 'group' : activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} disabled={actionInProgress} />)
                       )}
                       </div>
 
@@ -1037,7 +1037,7 @@ function TodoList({ token, user }) {
                             {doneTodos.length === 0 ? (
                               <p style={{ textAlign: 'center', color: '#6b7280', padding: '1rem', background: 'rgba(0, 39, 60, 0.5)', borderRadius: '8px' }}>No completed tasks for this date.</p>
                             ) : (
-                              doneTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={true} activeTab={activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} disabled={actionInProgress} />)
+                              doneTodos.map(todo => <TaskCard key={todo.id} todo={todo} isCompleted={true} activeTab={activeTab === 'team' && teamSubTab === 'manage' ? 'group' : activeTab} userProfile={userProfile} groups={groups} isCoordinator={isCoordinator} onToggle={toggleTodo} onDelete={deleteTodo} onConfirm={openConfirmModal} onReject={deleteTodo} onConfirmCompletion={confirmCompletion} onRejectCompletion={rejectCompletion} disabled={actionInProgress} />)
                             )}
                           </>
                         )}
