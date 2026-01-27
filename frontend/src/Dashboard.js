@@ -1469,7 +1469,9 @@ function Dashboard({ token, user, onLogout }) {
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1000
-        }}>
+        }}
+        onClick={() => setModalDoc(null)}
+        >
           <div style={{
             background: '#001f35',
             padding: '2rem',
@@ -1477,8 +1479,33 @@ function Dashboard({ token, user, onLogout }) {
             maxWidth: '600px',
             maxHeight: '80vh',
             overflow: 'auto',
-            border: '1px solid rgba(255, 113, 32, 0.2)'
-          }}>
+            border: '1px solid rgba(255, 113, 32, 0.2)',
+            position: 'relative'
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setModalDoc(null)}
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: 'rgba(255, 113, 32, 0.2)',
+                border: '1px solid #FF7120',
+                color: '#FF7120',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                fontSize: '1.2rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold'
+              }}
+            >
+              ×
+            </button>
             <h3 style={{ color: '#ffffff', marginBottom: '1rem' }}>Work Documentation</h3>
             <div
               style={{ color: '#e8eaed', lineHeight: '1.6', marginBottom: '1.5rem' }}
