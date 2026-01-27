@@ -80,6 +80,21 @@ const auth = async (req, res, next) => {
   }
 };
 
+// Notification helper function
+const createNotification = async (userId, type, title, message, link = null) => {
+  try {
+    await supabaseAdmin.from('notifications').insert({
+      user_id: userId,
+      type,
+      title,
+      message,
+      link
+    });
+  } catch (err) {
+    console.error('Notification creation failed:', err);
+  }
+};
+
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -1501,6 +1516,25 @@ app.post('/api/todos', auth, async (req, res) => {
       todoData.suggested_by = req.user.id;
       todoData.is_confirmed = isLeader; // Auto-confirm if created by leader
       console.log('Creating group todo:', { group_id, suggested_by: req.user.id, is_confirmed: isLeader, isLeader });
+
+      // Notify leader if member suggests a task
+      if (!isLeader && group?.leader_id) {
+        const { data: suggester } = await supabaseAdmin
+          .from('profiles')
+          .select('full_name')
+          .eq('id', req.user.id)
+          .single();
+
+        const taskTitle = task.replace(/^\[.*?\]\s*/, '').substring(0, 60);
+        
+        await createNotification(
+          group.leader_id,
+          'group_task_suggested',
+          'New Team Task Suggestion',
+          `${suggester?.full_name || 'A member'} suggested a task: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"`,
+          'todos:team:manage'
+        );
+      }
     } else if (todo_type === 'assigned') {
       // Only leaders or coordinators can assign tasks
       const isCoordinator = profile?.role === 'coordinator';
@@ -1559,6 +1593,27 @@ app.post('/api/todos', auth, async (req, res) => {
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Create notification for assigned task
+    if (todoData.todo_type === 'assigned' && todoData.assigned_to) {
+      const { data: assigner } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name')
+        .eq('id', req.user.id)
+        .single();
+      
+      // Extract task title (remove date prefix if exists)
+      const taskTitle = task.replace(/^\[.*?\]\s*/, '').substring(0, 60);
+      
+      await createNotification(
+        todoData.assigned_to,
+        'task_assigned',
+        'New Task Assigned',
+        `${assigner?.full_name || 'Someone'} assigned you: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"`,
+        'todos:team'
+      );
+    }
+
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1665,6 +1720,51 @@ app.put('/api/todos/:id', auth, async (req, res) => {
       .eq('id', req.params.id);
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Create notification when completion is pending
+    if (completed === true && !todo.completed && updateData.pending_completion) {
+      const notifyUserId = todo.assigned_by || todo.group?.leader_id;
+      if (notifyUserId) {
+        const { data: assignee } = await supabaseAdmin
+          .from('profiles')
+          .select('full_name')
+          .eq('id', req.user.id)
+          .single();
+        
+        const taskTitle = todo.task.replace(/^\[.*?\]\s*/, '').substring(0, 60);
+        
+        await createNotification(
+          notifyUserId,
+          'task_pending_completion',
+          'Task Completion Approval Pending',
+          `${assignee?.full_name || 'Someone'} submitted task for approval: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"`,
+          'todos:team:manage'
+        );
+      }
+    }
+
+    // Create notification when self-assigned task is completed directly
+    if (completed === true && !todo.completed && !updateData.pending_completion && todo.todo_type === 'assigned') {
+      const isSelfAssigned = todo.assigned_to === todo.assigned_by;
+      if (isSelfAssigned && isAssignee) {
+        const { data: assignee } = await supabaseAdmin
+          .from('profiles')
+          .select('full_name')
+          .eq('id', req.user.id)
+          .single();
+        
+        const taskTitle = todo.task.replace(/^\[.*?\]\s*/, '').substring(0, 60);
+        
+        await createNotification(
+          req.user.id,
+          'task_completion_confirmed',
+          'Task Completed',
+          `You completed: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"`,
+          'todos:team'
+        );
+      }
+    }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1674,7 +1774,7 @@ app.put('/api/todos/:id', auth, async (req, res) => {
 // Confirm group todo (leaders only) - with assignment details
 app.post('/api/todos/:id/confirm', auth, async (req, res) => {
   try {
-    const { start_date, deadline, assigned_to, task } = req.body;
+    const { start_date, deadline, assigned_to, task, description } = req.body;
 
     const { data: todo } = await supabaseAdmin
       .from('todos')
@@ -1700,6 +1800,7 @@ app.post('/api/todos/:id/confirm', auth, async (req, res) => {
     if (start_date) updateData.start_date = start_date;
     if (deadline) updateData.deadline = deadline;
     if (task) updateData.task = task;
+    if (description !== undefined) updateData.description = description;
 
     // If assigning to someone, change todo_type to 'assigned' and set assigned_to/assigned_by
     if (assigned_to) {
@@ -1716,6 +1817,36 @@ app.post('/api/todos/:id/confirm', auth, async (req, res) => {
       .eq('id', req.params.id);
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Notify suggestor about confirmation
+    if (todo.suggested_by) {
+      const taskTitle = (task || todo.task).replace(/^\[.*?\]\s*/, '').substring(0, 60);
+      
+      await createNotification(
+        todo.suggested_by,
+        'group_task_confirmed',
+        'Team Task Approved',
+        `Leader approved your suggestion: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"`,
+        'todos:team'
+      );
+    }
+
+    // Notify assignee if task was assigned to someone (even if they're the suggestor)
+    if (assigned_to) {
+      const taskTitle = (task || todo.task).replace(/^\[.*?\]\s*/, '').substring(0, 60);
+      const isSelfAssign = assigned_to === req.user.id;
+      
+      await createNotification(
+        assigned_to,
+        'task_assigned',
+        'Task Assigned to You',
+        isSelfAssign 
+          ? `You assigned yourself a task: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"` 
+          : `Leader assigned you a task: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"`,
+        'todos:team'
+      );
+    }
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1765,6 +1896,18 @@ app.post('/api/todos/:id/confirm-completion', auth, async (req, res) => {
       .eq('id', req.params.id);
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Create notification for completion approval
+    const taskTitle = todo.task.replace(/^\[.*?\]\s*/, '').substring(0, 60);
+    
+    await createNotification(
+      todo.assigned_to || todo.user_id,
+      'task_completion_confirmed',
+      'Task Approved',
+      `Your task completion was approved: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"`,
+      'todos:team'
+    );
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1814,6 +1957,18 @@ app.post('/api/todos/:id/reject-completion', auth, async (req, res) => {
       .eq('id', req.params.id);
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Create notification for completion rejection
+    const taskTitle = todo.task.replace(/^\[.*?\]\s*/, '').substring(0, 60);
+    
+    await createNotification(
+      todo.assigned_to || todo.user_id,
+      'task_completion_rejected',
+      'Task Rejected',
+      `Your task completion needs revision: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"`,
+      'todos:team'
+    );
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1858,6 +2013,19 @@ app.delete('/api/todos/:id', auth, async (req, res) => {
 
     if (!canDelete) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Notify suggestor if their suggestion is rejected (deleted before confirmation)
+    if (todo.todo_type === 'group' && !todo.is_confirmed && todo.suggested_by) {
+      const taskTitle = todo.task.replace(/^\[.*?\]\s*/, '').substring(0, 60);
+      
+      await createNotification(
+        todo.suggested_by,
+        'group_task_rejected',
+        'Team Task Declined',
+        `Leader declined your suggestion: "${taskTitle}${taskTitle.length >= 60 ? '...' : ''}"`,
+        'todos:team'
+      );
     }
 
     const { error } = await supabaseAdmin
@@ -2146,6 +2314,23 @@ app.put('/api/notifications/:id/read', auth, async (req, res) => {
   }
 });
 
+// Mark all notifications as read
+app.put('/api/notifications/read-all', auth, async (req, res) => {
+  try {
+    const { error } = await supabaseAdmin
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', req.user.id)
+      .eq('is_read', false);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Mark all notifications read exception:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Admin manual check-in for users
 app.post('/api/admin/checkin/:userId', auth, async (req, res) => {
   try {
@@ -2429,7 +2614,7 @@ app.post('/api/department-tasks', auth, async (req, res) => {
     const { task, description, deadline, priority } = req.body;
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('department')
+      .select('department, full_name')
       .eq('id', req.user.id)
       .single();
 
@@ -2455,6 +2640,27 @@ app.post('/api/department-tasks', auth, async (req, res) => {
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Notify all department members
+    const { data: deptMembers } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('department', profile.department)
+      .neq('id', req.user.id);
+
+    if (deptMembers && deptMembers.length > 0) {
+      const taskTitle = task.substring(0, 60);
+      for (const member of deptMembers) {
+        await createNotification(
+          member.id,
+          'department_task_suggested',
+          `${profile.full_name} suggested a task`,
+          taskTitle,
+          'todos:department'
+        );
+      }
+    }
+
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2464,12 +2670,37 @@ app.post('/api/department-tasks', auth, async (req, res) => {
 // Grab department task
 app.post('/api/department-tasks/:id/grab', auth, async (req, res) => {
   try {
+    const { data: task } = await supabaseAdmin
+      .from('department_tasks')
+      .select('task, suggested_by')
+      .eq('id', req.params.id)
+      .single();
+
     const { data, error } = await supabaseAdmin.rpc('grab_department_task', {
       task_id: req.params.id,
       user_id: req.user.id
     });
 
     if (error) return res.status(500).json({ error: error.message });
+
+    // Notify suggester
+    if (task?.suggested_by) {
+      const { data: grabber } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name')
+        .eq('id', req.user.id)
+        .single();
+
+      const taskTitle = task.task.substring(0, 60);
+      await createNotification(
+        task.suggested_by,
+        'department_task_grabbed',
+        `${grabber?.full_name || 'Someone'} grabbed your task`,
+        taskTitle,
+        'todos:department'
+      );
+    }
+
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2494,12 +2725,57 @@ app.post('/api/department-tasks/:id/complete', auth, async (req, res) => {
 // Abandon department task
 app.post('/api/department-tasks/:id/abandon', auth, async (req, res) => {
   try {
+    const { data: task } = await supabaseAdmin
+      .from('department_tasks')
+      .select('task, suggested_by, department')
+      .eq('id', req.params.id)
+      .single();
+
     const { data, error } = await supabaseAdmin.rpc('abandon_department_task', {
       task_id: req.params.id,
       user_id: req.user.id
     });
 
     if (error) return res.status(500).json({ error: error.message });
+
+    const { data: abandoner } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', req.user.id)
+      .single();
+
+    const taskTitle = task.task.substring(0, 60);
+
+    // Notify suggester
+    if (task?.suggested_by) {
+      await createNotification(
+        task.suggested_by,
+        'department_task_abandoned',
+        `${abandoner?.full_name || 'Someone'} abandoned your task`,
+        taskTitle,
+        'todos:department'
+      );
+    }
+
+    // Notify all department members (except abandoner)
+    const { data: deptMembers } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('department', task.department)
+      .neq('id', req.user.id);
+
+    if (deptMembers && deptMembers.length > 0) {
+      for (const member of deptMembers) {
+        await createNotification(
+          member.id,
+          'department_task_available',
+          'Task available to grab',
+          taskTitle,
+          'todos:department'
+        );
+      }
+    }
+
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
